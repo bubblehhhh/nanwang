@@ -27,6 +27,7 @@ build_spec_doc.py
 # Legacy standalone exports and local launchers
 gamification-design.html
 南网*.html
+!南网薪火_业务需求与设计说明.html
 南网*_files/
 启动南网平台.cmd
 
