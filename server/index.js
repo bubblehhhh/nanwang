@@ -78,6 +78,10 @@ const apiCatalog = [
   ['工作库', 'POST', '/api/reports/generate', '生成日报、周报、月报或报奖材料'],
   ['工作库', 'POST', '/api/reports/export', '导出PDF、Word或PPT文件'],
   ['成长', 'GET', '/api/growth', '查询成长积分与里程碑'],
+  ['能力培养', 'GET', '/api/capabilities', '查询岗位能力、差距、证据与人才热力图'],
+  ['能力培养', 'POST', '/api/capabilities/:userId/assess', '师傅进行五级能力认证'],
+  ['能力培养', 'POST', '/api/training-path/generate', '按能力差距生成培养路径'],
+  ['能力培养', 'POST', '/api/weekly-reviews', '提交或点评师徒周复盘'],
   ['关怀', 'GET', '/api/care', '查询关怀中心数据'],
   ['关怀', 'POST', '/api/care/emotion', '提交每日情绪打卡'],
   ['关怀', 'POST', '/api/care/message', '发送师徒问候'],
@@ -149,6 +153,8 @@ app.post('/api/tasks', auth, (req, res) => {
   const db = readDb()
   const assignee = db.users.find((u) => u.id === Number(req.body.assigneeId))
   if (!assignee) return fail(res, 400, '请选择有效的任务负责人')
+  if (!Array.isArray(req.body.skillIds) || !req.body.skillIds.length) return fail(res, 400, '任务必须关联至少一项岗位技能')
+  if (['P0', 'P1'].includes(req.body.priority) && (!Array.isArray(req.body.riskPoints) || !req.body.riskPoints.length)) return fail(res, 400, 'P0/P1任务必须填写安全风险点')
   if (db.tasks.some((item) => taskKey(item) === taskKey(req.body))) return fail(res, 409, '该负责人已存在同名任务，不能重复发布')
   const task = { id: nextId(db.tasks), ...req.body, assigneeId: assignee.id, assignee: assignee.name, creatorId: req.user.id, progress: 0, status: 'todo', createdAt: new Date().toISOString().slice(0, 10) }
   db.tasks.push(task); writeDb(db); ok(res, task, '任务已发布')
@@ -164,7 +170,8 @@ app.post('/api/tasks/bulk', auth, (req, res) => {
     const key = taskKey(item)
     if (!assignee || !item.title?.trim()) { duplicates.push({ title: item.title || '未命名任务', reason: '负责人或任务名称无效' }); continue }
     if (existing.has(key) || batch.has(key)) { duplicates.push({ title: item.title, reason: '同一负责人已存在同名任务' }); continue }
-    const task = { id: nextId([...db.tasks, ...published]), ...item, assigneeId: assignee.id, assignee: assignee.name, creatorId: req.user.id, progress: 0, status: 'todo', createdAt: new Date().toISOString().slice(0, 10) }
+    const inferredSkills = item.workCategory === 'meeting' ? ['COOP-01', 'SAFE-01'] : item.workCategory === 'project' ? ['OPS-01', 'SAFE-01'] : ['DATA-01', 'COOP-01']
+    const task = { id: nextId([...db.tasks, ...published]), ...item, skillIds: item.skillIds?.length ? item.skillIds : inferredSkills, riskPoints: item.riskPoints?.length ? item.riskPoints : ['作业前确认任务边界和安全条件', '出现异常立即停止并报告'], evidenceRequired: item.evidenceRequired?.length ? item.evidenceRequired : ['工作记录', '成果或现场佐证', '复盘说明'], assigneeId: assignee.id, assignee: assignee.name, creatorId: req.user.id, progress: 0, status: 'todo', createdAt: new Date().toISOString().slice(0, 10) }
     published.push(task); batch.add(key)
   }
   db.tasks.push(...published); writeDb(db)
@@ -262,6 +269,65 @@ app.get('/api/growth', auth, (req, res) => {
   const rank = points > 600 ? '皇冠' : points >= 300 ? '太阳' : points >= 100 ? '月亮' : '星星'
   const next = points > 600 ? 800 : points >= 300 ? 600 : points >= 100 ? 300 : 100
   ok(res, { points, rank, next, percent: Math.min(100, Math.round(points / next * 100)), weights: { schedule: 40, meeting: 25, practice: 20, supplement: 15 }, milestones: db.milestones.filter((m) => m.userId === userId), tasks })
+})
+
+const levelNames = ['未接触', '观察学习', '协助完成', '独立完成', '能够带教']
+const latestAssessment = (db, userId, skillId) => db.competencyAssessments.filter(item => item.userId === Number(userId) && item.skillId === skillId).sort((a,b) => b.id - a.id)[0]
+const capabilitySnapshot = (db, userId) => {
+  const user = db.users.find(item => item.id === Number(userId))
+  const skills = db.skillCatalog.map(skill => {
+    const assessment = latestAssessment(db, userId, skill.id)
+    const relatedTasks = db.tasks.filter(task => task.assigneeId === Number(userId) && task.skillIds?.includes(skill.id))
+    const evidenceCount = Math.max(assessment?.evidenceCount || 0, relatedTasks.filter(task => task.status === 'done').length)
+    const level = assessment?.level || 1
+    return { ...skill, level, levelName: levelNames[level - 1], gap: Math.max(0, skill.targetLevel - level), evidenceCount, assessment, relatedTaskCount: relatedTasks.length }
+  })
+  const readiness = Math.round(skills.reduce((sum, skill) => sum + Math.min(skill.level / skill.targetLevel, 1), 0) / skills.length * 100)
+  return { user: user && (({ password, ...safe }) => safe)(user), readiness, skills, gaps: skills.filter(skill => skill.gap > 0).sort((a,b) => Number(b.critical) - Number(a.critical) || b.gap - a.gap) }
+}
+
+app.get('/api/capabilities', auth, (req, res) => {
+  const db = readDb()
+  const requestedId = Number(req.query.userId || req.user.id)
+  if (req.user.role !== 'mentor' && requestedId !== req.user.id) return fail(res, 403, '只能查看本人的能力档案')
+  const snapshot = capabilitySnapshot(db, requestedId)
+  const heatmap = req.user.role === 'mentor' ? db.users.filter(user => user.role === 'apprentice').map(user => capabilitySnapshot(db, user.id)) : []
+  const skillIds = snapshot.gaps.slice(0, 3).map(skill => skill.id)
+  ok(res, { ...snapshot, heatmap, safetyCases: db.safetyCases.filter(item => item.skillIds.some(id => skillIds.includes(id))), reviews: db.weeklyReviews.filter(item => item.userId === requestedId).sort((a,b) => b.id - a.id), levelNames })
+})
+
+app.post('/api/capabilities/:userId/assess', auth, (req, res) => {
+  if (req.user.role !== 'mentor') return fail(res, 403, '只有师傅可以进行能力认证')
+  const db = readDb(); const userId = Number(req.params.userId); const skill = db.skillCatalog.find(item => item.id === req.body.skillId)
+  const level = Number(req.body.level); const evidenceCount = Number(req.body.evidenceCount || 0)
+  if (!db.users.some(item => item.id === userId && item.role === 'apprentice') || !skill) return fail(res, 400, '学员或技能不存在')
+  if (level < 1 || level > 5) return fail(res, 400, '能力等级必须在1至5级之间')
+  if (level >= 4 && evidenceCount < 2) return fail(res, 400, '认证为独立完成或能够带教至少需要2项有效证据')
+  const item = { id: nextId(db.competencyAssessments), userId, skillId: skill.id, level, evidenceCount, assessorId: req.user.id, comment: String(req.body.comment || ''), date: new Date().toISOString().slice(0,10) }
+  db.competencyAssessments.push(item); writeDb(db); ok(res, item, '能力认证已保存')
+})
+
+app.post('/api/training-path/generate', auth, (req, res) => {
+  const db = readDb(); const userId = Number(req.body.userId || req.user.id)
+  if (req.user.role !== 'mentor' && userId !== req.user.id) return fail(res, 403, '只能生成本人的培养路径')
+  const snapshot = capabilitySnapshot(db, userId)
+  const path = snapshot.gaps.slice(0, 4).map((skill, index) => ({
+    stage: index + 1, skillId: skill.id, skillName: skill.name, objective: `从“${skill.levelName}”提升至“${levelNames[Math.min(skill.targetLevel, skill.level + 1) - 1]}”`,
+    action: skill.critical ? '先完成安全案例推演，再在师傅监护下完成现场任务' : '完成结构化学习、工作实践和复盘',
+    evidence: skill.critical ? ['风险预控卡', '现场任务记录', '师傅评价'] : ['学习笔记', '工作成果', '复盘记录'], durationWeeks: skill.gap >= 2 ? 2 : 1
+  }))
+  ok(res, { user: snapshot.user, readiness: snapshot.readiness, path, principle: '安全前置、任务牵引、证据认证、逐级放权' }, '培养路径已生成')
+})
+
+app.post('/api/weekly-reviews', auth, (req, res) => {
+  const db = readDb(); const userId = req.user.role === 'mentor' ? Number(req.body.userId) : req.user.id
+  if (!db.users.some(item => item.id === userId && item.role === 'apprentice')) return fail(res, 400, '请选择有效学员')
+  const existing = db.weeklyReviews.find(item => item.userId === userId && item.week === req.body.week)
+  if (existing && req.user.role === 'mentor') { existing.mentorComment = String(req.body.mentorComment || ''); existing.status = 'reviewed'; writeDb(db); return ok(res, existing, '周复盘点评已保存') }
+  if (existing) return fail(res, 409, '本周复盘已经提交')
+  const item = { id: nextId(db.weeklyReviews), userId, mentorId: db.users.find(item => item.id === userId)?.mentorId, week: req.body.week || new Date().toISOString().slice(0,10), achievements: String(req.body.achievements || ''), blockers: String(req.body.blockers || ''), supportNeeded: String(req.body.supportNeeded || ''), nextFocus: String(req.body.nextFocus || ''), mentorComment: '', status: 'submitted', createdAt: new Date().toISOString() }
+  if (!item.achievements || !item.nextFocus) return fail(res, 400, '请填写本周成果和下周重点')
+  db.weeklyReviews.push(item); writeDb(db); ok(res, item, '周复盘已提交')
 })
 
 app.get('/api/care', auth, (req, res) => { const db = readDb(); ok(res, { emotion: db.emotions.find((e) => e.userId === req.user.id && e.date === new Date().toISOString().slice(0,10)), praise: db.praise, gratitude: db.gratitude || [], messages: db.messages.filter((m) => m.fromId === req.user.id || m.toId === req.user.id), users: db.users.map(({ password, ...user }) => user), actions: (db.careActions || []).filter(item => item.userId === req.user.id), config: db.moduleConfig[req.user.id] || null }) })
