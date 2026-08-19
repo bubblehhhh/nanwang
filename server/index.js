@@ -16,8 +16,13 @@ import { generateReportWithAI, splitWithAI } from './ai.js'
 
 const app = express()
 const uploadDir = path.resolve('server/uploads')
+const aiSettingsFile = path.resolve('server/data/ai-settings.json')
 fs.mkdirSync(uploadDir, { recursive: true })
 const upload = multer({ dest: uploadDir, limits: { fileSize: 20 * 1024 * 1024 } })
+
+if (!process.env.DEEPSEEK_API_KEY && fs.existsSync(aiSettingsFile)) {
+  try { process.env.DEEPSEEK_API_KEY = JSON.parse(fs.readFileSync(aiSettingsFile, 'utf8')).apiKey || '' } catch {}
+}
 
 app.use(cors())
 app.use(express.json({ limit: '5mb' }))
@@ -56,6 +61,7 @@ function desensitize(text = '') {
 
 const apiCatalog = [
   ['系统', 'GET', '/api/health', '检查后端与AI配置状态'],
+  ['系统', 'POST', '/api/settings/ai-key', '首次保存后端AI密钥'],
   ['认证', 'POST', '/api/auth/login', '用户登录与角色校验'],
   ['工作台', 'GET', '/api/dashboard', '获取工作台统计、任务和人员'],
   ['任务', 'GET', '/api/tasks', '查询当前角色可见任务'],
@@ -93,6 +99,16 @@ app.get('/docs', (_req, res) => {
 })
 
 app.get('/api/health', (_, res) => ok(res, { status: 'ok', aiConfigured: Boolean(process.env.DEEPSEEK_API_KEY) }))
+
+app.post('/api/settings/ai-key', (req, res) => {
+  if (process.env.DEEPSEEK_API_KEY) return fail(res, 409, 'AI密钥已经设置，无需重复配置')
+  const apiKey = String(req.body.apiKey || '').trim()
+  if (!/^sk-[A-Za-z0-9_-]{20,}$/.test(apiKey)) return fail(res, 400, '请输入有效的DeepSeek API密钥')
+  fs.mkdirSync(path.dirname(aiSettingsFile), { recursive: true })
+  fs.writeFileSync(aiSettingsFile, JSON.stringify({ apiKey }, null, 2), { encoding: 'utf8', mode: 0o600 })
+  process.env.DEEPSEEK_API_KEY = apiKey
+  ok(res, { configured: true }, 'AI密钥设置成功')
+})
 
 app.post('/api/auth/login', (req, res) => {
   const { username, password, role } = req.body
