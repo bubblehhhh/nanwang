@@ -8,7 +8,10 @@ const pointByPriority = { P0: 120, P1: 80, P2: 50, P3: 30 }
 
 const fallbackTasks = (text) => {
   const sentences = text.split(/[。；;\n]/).map((item) => item.trim()).filter(Boolean).slice(0, 6)
-  return (sentences.length ? sentences : ['核对输入内容并形成执行清单']).map((item, index) => ({
+  const items = sentences.length ? [...sentences] : ['核对输入内容并形成执行清单']
+  const defaults = ['确认任务范围、责任人与完成标准', '执行任务并记录关键过程和异常', '复核成果、反馈结果并完成归档']
+  while (items.length < 3) items.push(defaults[items.length])
+  return items.map((item, index) => ({
     title: item.length > 24 ? `${item.slice(0, 24)}…` : item,
     description: item,
     priority: index === 0 ? 'P1' : 'P2',
