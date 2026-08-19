@@ -1,0 +1,31 @@
+node_modules/
+dist/
+web-dist/
+.dockerignore
+Dockerfile
+.env
+.env.*
+!.env.example
+server/data/db.json
+server/uploads/
+*.log
+
+# Local source materials and generated delivery packages
+测试数据/
+南网平台/
+南网平台.zip
+rendered_spec/
+gamification-design/
+.trae-html-share-packages/
+*.docx
+*.xlsx
+*.rar
+初始设置_抽取.txt
+build_spec_doc.py
+
+# Legacy standalone exports and local launchers
+gamification-design.html
+南网*.html
+南网*_files/
+启动南网平台.cmd
+
