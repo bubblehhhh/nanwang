@@ -15,7 +15,30 @@ const seed = {
   ],
   loginAttempts: {},
   tasks: [
-    { id: 101, title: '完成220kV设备巡视记录', description: '按巡视规范完成一次设备检查并上传记录', priority: 'P1', workCategory: 'project', projectName: '220kV变电站运维提升项目', startTime: '09:00', endTime: '10:30', assigneeId: 1, assignee: '张三', creatorId: 3, source: '导师任务', status: 'doing', progress: 65, dueDate: today, standard: '巡视点位完整，异常项附照片', points: 80, method: '四象限法', createdAt: today }
+    { id: 101, title: '完成220kV设备巡视记录', description: '按巡视规范完成一次设备检查并上传记录', priority: 'P1', workCategory: 'project', projectName: '220kV变电站运维提升项目', startTime: '09:00', endTime: '10:30', assigneeId: 1, assignee: '张三', creatorId: 3, source: '导师任务', status: 'doing', progress: 65, dueDate: today, standard: '巡视点位完整，异常项附照片', points: 80, method: '四象限法', skillIds: ['OPS-01', 'SAFE-01'], riskPoints: ['设备带电区域保持安全距离', '发现异常不得擅自处置'], evidenceRequired: ['巡视记录', '异常点照片'], createdAt: today }
+  ],
+  skillCatalog: [
+    { id: 'SAFE-01', domain: '安全生产', name: '作业风险辨识与控制', description: '识别作业危险点并落实控制措施', targetLevel: 4, critical: true },
+    { id: 'OPS-01', domain: '变电运维', name: '一次设备巡视', description: '按标准完成设备巡视、异常识别与记录', targetLevel: 4, critical: true },
+    { id: 'OPS-02', domain: '变电运维', name: '倒闸操作与两票执行', description: '规范执行操作票、工作票及复诵监护', targetLevel: 3, critical: true },
+    { id: 'RELAY-01', domain: '继电保护', name: '保护装置定值核验', description: '核对定值单、装置参数及版本一致性', targetLevel: 3, critical: true },
+    { id: 'DATA-01', domain: '数字化能力', name: '生产记录数字化', description: '形成结构化、可追溯的工作记录和证据', targetLevel: 3, critical: false },
+    { id: 'COOP-01', domain: '协同能力', name: '班组沟通与复盘', description: '清晰反馈进展、困难和改进措施', targetLevel: 3, critical: false }
+  ],
+  competencyAssessments: [
+    { id: 801, userId: 1, skillId: 'OPS-01', level: 3, evidenceCount: 4, assessorId: 3, comment: '可在指导下独立完成常规巡视，异常判断仍需加强。', date: today },
+    { id: 802, userId: 1, skillId: 'SAFE-01', level: 2, evidenceCount: 3, assessorId: 3, comment: '能识别常见风险，复杂场景控制措施需补充。', date: today },
+    { id: 803, userId: 1, skillId: 'DATA-01', level: 3, evidenceCount: 5, assessorId: 3, comment: '记录规范，具备较好的数字化留痕习惯。', date: today },
+    { id: 804, userId: 2, skillId: 'RELAY-01', level: 2, evidenceCount: 2, assessorId: 3, comment: '掌握基础核对流程，需要增加现场练习。', date: today },
+    { id: 805, userId: 2, skillId: 'SAFE-01', level: 2, evidenceCount: 2, assessorId: 3, comment: '基础风险意识良好。', date: today }
+  ],
+  safetyCases: [
+    { id: 901, skillIds: ['OPS-01', 'SAFE-01'], title: '巡视中发现设备异常声响', scene: '主变巡视', risk: '设备内部故障扩大及人身触电风险', controls: ['保持安全距离并停止靠近', '记录位置、时间和现象', '立即报告值班负责人并按指令处置'], lesson: '异常识别后先隔离风险、再准确报告，禁止凭经验擅自靠近。' },
+    { id: 902, skillIds: ['OPS-02', 'SAFE-01'], title: '倒闸操作顺序复核', scene: '停送电操作', risk: '误操作导致设备损坏或人身伤害', controls: ['操作前核对设备双重名称', '严格执行唱票复诵和监护', '关键步骤完成后检查设备状态'], lesson: '任何时间压力都不能替代操作票和监护制度。' },
+    { id: 903, skillIds: ['RELAY-01', 'SAFE-01'], title: '保护定值版本不一致', scene: '定值核验', risk: '保护误动或拒动', controls: ['核对审批定值单版本', '双人复核装置区号和校验码', '差异未闭环前禁止投运'], lesson: '定值核验必须形成双人签字和版本证据链。' }
+  ],
+  weeklyReviews: [
+    { id: 1001, userId: 1, mentorId: 3, week: today, achievements: '完成12个巡视点位并闭环1项标识问题。', blockers: '复杂异常现象判断经验不足。', supportNeeded: '希望师傅结合历史案例讲解异常声响判断。', nextFocus: '强化风险辨识与异常报告。', mentorComment: '下周安排一次典型异常案例推演。', status: 'reviewed', createdAt: today }
   ],
   workLogs: [
     { id: 201, userId: 1, date: today, hours: 2.5, content: '完成变电站一次设备巡视，核查12个点位，发现并闭环1项标识问题。', result: '12个点位完成，1项问题闭环', tags: ['巡视', '安全'] },
@@ -54,6 +77,14 @@ export function initDb() {
     })
     if (!db.gratitude) { db.gratitude = seed.gratitude; changed = true }
     if (!db.careActions) { db.careActions = []; changed = true }
+    for (const field of ['skillCatalog', 'competencyAssessments', 'safetyCases', 'weeklyReviews']) {
+      if (!db[field]) { db[field] = seed[field]; changed = true }
+    }
+    db.tasks.forEach(task => {
+      if (!task.skillIds) { task.skillIds = task.workCategory === 'meeting' ? ['COOP-01'] : ['DATA-01']; changed = true }
+      if (!task.riskPoints) { task.riskPoints = []; changed = true }
+      if (!task.evidenceRequired) { task.evidenceRequired = ['工作记录']; changed = true }
+    })
     if (changed) fs.writeFileSync(dataFile, JSON.stringify(db, null, 2), 'utf8')
   }
 }
