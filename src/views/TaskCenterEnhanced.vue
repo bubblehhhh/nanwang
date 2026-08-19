@@ -110,7 +110,7 @@ onMounted(load)
 </section>
 </div>
 <el-empty v-if="!workGroups.length" description="暂无符合条件的任务"/>
-<el-dialog v-model="dialog" title="发布能力培养任务" width="720">
+<el-dialog v-model="dialog" title="发布能力培养任务" width="720" append-to-body>
 <el-form label-position="top">
 <el-form-item label="任务名称">
 <el-input v-model="form.title"/>
@@ -166,7 +166,7 @@ onMounted(load)
 <el-button type="primary" @click="create">确认发布</el-button>
 </template>
 </el-dialog>
-<el-dialog v-model="progressDialog" :title="auth.user?.role==='mentor'?'任务详情':'更新任务进度'" width="560">
+<el-dialog v-model="progressDialog" :title="auth.user?.role==='mentor'?'任务详情':'更新任务进度'" width="560" append-to-body>
 <template v-if="active">
 <h3>{{active.title}}</h3>
 <el-slider v-model="active.progress" :step="5" show-input :disabled="auth.user?.role==='mentor'||active.status==='verify'||active.status==='done'"/>

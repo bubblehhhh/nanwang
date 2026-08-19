@@ -158,14 +158,17 @@ app.get('/api/dashboard', auth, (req, res) => {
   ok(res, { tasks: scope, stats: { total: scope.length, completed, progress, due: scope.filter((t) => t.dueDate <= new Date().toISOString().slice(0, 10) && t.status !== 'done').length, points: scope.reduce((sum, task) => sum + Math.round((task.points || 50) * task.progress / 100), 0) + likes.reduce((sum, item) => sum + item.points, 0), weeklyPoints: weeklyTaskPoints + weeklyLikePoints, pendingPoints, likes: likes.length }, workload, notes, likes, users: db.users.map(({ password, ...u }) => u), milestones: db.milestones })
 })
 
+let weatherCache = null
 app.get('/api/weather/hourly', auth, async (_req, res) => {
+  if (weatherCache && Date.now() - weatherCache.at < 600000) return ok(res, weatherCache.data)
   try {
     const url = 'https://api.open-meteo.com/v1/forecast?latitude=23.1291&longitude=113.2644&hourly=temperature_2m,precipitation_probability,weather_code&current=temperature_2m,weather_code&timezone=Asia%2FShanghai&forecast_days=2'
     const response = await fetch(url, { signal: AbortSignal.timeout(6000) })
     if (!response.ok) throw new Error(`天气服务返回 ${response.status}`)
     const data = await response.json(); const now = Date.now() - 3600000
     const hourly = data.hourly.time.map((time, index) => ({ time, temperature: data.hourly.temperature_2m[index], rain: data.hourly.precipitation_probability[index], code: data.hourly.weather_code[index] })).filter(item => new Date(item.time).getTime() >= now).slice(0, 12)
-    ok(res, { city: '广州', current: data.current, hourly, live: true })
+    weatherCache = { at: Date.now(), data: { city: '广州', current: data.current, hourly, live: true } }
+    ok(res, weatherCache.data)
   } catch {
     const base = new Date(); base.setMinutes(0, 0, 0)
     const hourly = Array.from({ length: 12 }, (_, index) => ({ time: new Date(base.getTime() + index * 3600000).toISOString(), temperature: 27 + Math.round(Math.sin(index / 3) * 3), rain: [20, 20, 30, 45, 60, 50, 35, 25, 20, 15, 15, 20][index], code: index > 2 && index < 7 ? 61 : 3 }))
