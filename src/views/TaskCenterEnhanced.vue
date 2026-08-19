@@ -86,7 +86,7 @@ onMounted(load)
 <div v-for="task in group.tasks" :key="task.id" class="compact-task-row">
 <div class="compact-title">
 <b>{{task.title}}</b>
-<span>{{task.assignee}} · {{task.startTime||'时间待定'}}-{{task.endTime||''}} · {{task.projectName}} · 截止 {{task.dueDate}} · 奖励 {{task.points||50}} 积分</span>
+<span>{{task.assignee}} · {{task.startTime||'时间待定'}}-{{task.endTime||''}} · {{task.projectName}} · 截止 {{task.dueDate}} · {{task.status==='done'?'已获得':'完成可得'}} {{task.points||50}} 成长积分</span>
 <div class="task-skill-tags"><el-tag v-for="id in task.skillIds||[]" :key="id" size="small" effect="plain">{{skills.find(s=>s.id===id)?.name||id}}</el-tag><span v-if="task.riskPoints?.length" class="risk-count">{{task.riskPoints.length}}项风险预控</span></div>
 </div>
 <div class="compact-progress">
