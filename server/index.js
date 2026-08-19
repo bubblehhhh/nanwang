@@ -64,11 +64,13 @@ const apiCatalog = [
   ['系统', 'POST', '/api/settings/ai-key', '首次保存后端AI密钥'],
   ['认证', 'POST', '/api/auth/login', '用户登录与角色校验'],
   ['工作台', 'GET', '/api/dashboard', '获取工作台统计、任务和人员'],
+  ['工作台', 'GET', '/api/weather/hourly', '获取逐小时温度和降雨概率'],
   ['任务', 'GET', '/api/tasks', '查询当前角色可见任务'],
   ['任务', 'POST', '/api/tasks', '发布单个任务'],
   ['任务', 'POST', '/api/tasks/bulk', '批量发布并拦截重复任务'],
   ['任务', 'PATCH', '/api/tasks/:id/progress', '任务负责人更新进度'],
   ['任务', 'POST', '/api/tasks/:id/verify', '师傅手动核销或退回任务'],
+  ['任务', 'POST', '/api/tasks/:id/like', '师傅点赞优秀任务并奖励积分'],
   ['智能处理', 'POST', '/api/file/upload', '上传并解析工作文件'],
   ['智能处理', 'POST', '/api/desensitize', '敏感文本脱敏'],
   ['智能处理', 'POST', '/api/task/split', '使用科学方法与AI拆解任务'],
@@ -140,7 +142,31 @@ app.get('/api/dashboard', auth, (req, res) => {
   const scope = req.user.role === 'mentor' ? db.tasks.filter((t) => [1, 2].includes(t.assigneeId)) : db.tasks.filter((t) => t.assigneeId === req.user.id)
   const completed = scope.filter((t) => t.status === 'done').length
   const progress = scope.length ? Math.round(scope.reduce((s, t) => s + t.progress, 0) / scope.length) : 0
-  ok(res, { tasks: scope, stats: { total: scope.length, completed, progress, due: scope.filter((t) => t.dueDate <= new Date().toISOString().slice(0, 10) && t.status !== 'done').length }, users: db.users.map(({ password, ...u }) => u), milestones: db.milestones })
+  const dates = Array.from({ length: 35 }, (_, index) => new Date(Date.now() + (index - 17) * 86400000).toISOString().slice(0, 10))
+  const workload = dates.map(date => {
+    const daily = scope.filter(task => task.dueDate === date || task.createdAt === date || task.completedAt === date)
+    const score = daily.reduce((sum, task) => sum + ({ P0: 4, P1: 3, P2: 2, P3: 1 })[task.priority], 0)
+    return { date, taskCount: daily.length, workload: score, level: Math.min(4, Math.ceil(score / 2)) }
+  })
+  const visibleIds = req.user.role === 'mentor' ? db.users.filter(user => user.role === 'apprentice').map(user => user.id) : [req.user.id]
+  const likes = db.taskLikes.filter(item => visibleIds.includes(item.toId)).sort((a, b) => b.id - a.id)
+  const notes = db.mentorNotes.filter(item => req.user.role === 'mentor' ? item.mentorId === req.user.id : item.toId === req.user.id).sort((a, b) => b.id - a.id)
+  ok(res, { tasks: scope, stats: { total: scope.length, completed, progress, due: scope.filter((t) => t.dueDate <= new Date().toISOString().slice(0, 10) && t.status !== 'done').length, points: scope.reduce((sum, task) => sum + Math.round((task.points || 50) * task.progress / 100), 0), likes: likes.length }, workload, notes, likes, users: db.users.map(({ password, ...u }) => u), milestones: db.milestones })
+})
+
+app.get('/api/weather/hourly', auth, async (_req, res) => {
+  try {
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=23.1291&longitude=113.2644&hourly=temperature_2m,precipitation_probability,weather_code&current=temperature_2m,weather_code&timezone=Asia%2FShanghai&forecast_days=2'
+    const response = await fetch(url, { signal: AbortSignal.timeout(6000) })
+    if (!response.ok) throw new Error(`天气服务返回 ${response.status}`)
+    const data = await response.json(); const now = Date.now() - 3600000
+    const hourly = data.hourly.time.map((time, index) => ({ time, temperature: data.hourly.temperature_2m[index], rain: data.hourly.precipitation_probability[index], code: data.hourly.weather_code[index] })).filter(item => new Date(item.time).getTime() >= now).slice(0, 12)
+    ok(res, { city: '广州', current: data.current, hourly, live: true })
+  } catch {
+    const base = new Date(); base.setMinutes(0, 0, 0)
+    const hourly = Array.from({ length: 12 }, (_, index) => ({ time: new Date(base.getTime() + index * 3600000).toISOString(), temperature: 27 + Math.round(Math.sin(index / 3) * 3), rain: [20, 20, 30, 45, 60, 50, 35, 25, 20, 15, 15, 20][index], code: index > 2 && index < 7 ? 61 : 3 }))
+    ok(res, { city: '广州', current: { temperature_2m: hourly[0].temperature, weather_code: hourly[0].code }, hourly, live: false }, '实时天气暂不可用，已显示演示预报')
+  }
 })
 
 app.get('/api/tasks', auth, (req, res) => {
@@ -197,6 +223,16 @@ app.post('/api/tasks/:id/verify', auth, (req, res) => {
   writeDb(db); ok(res, task, req.body.approved ? '任务已核销并进入工作库' : '任务已退回')
 })
 
+app.post('/api/tasks/:id/like', auth, (req, res) => {
+  if (req.user.role !== 'mentor') return fail(res, 403, '只有师傅可以点赞任务')
+  const db = readDb(); const task = db.tasks.find(item => item.id === Number(req.params.id))
+  if (!task) return fail(res, 404, '任务不存在')
+  if (task.status !== 'done') return fail(res, 409, '任务核销后才能点赞')
+  if (db.taskLikes.some(item => item.taskId === task.id && item.fromId === req.user.id)) return fail(res, 409, '该任务已经点赞，不能重复奖励')
+  const item = { id: nextId(db.taskLikes), taskId: task.id, taskTitle: task.title, fromId: req.user.id, from: req.user.name, toId: task.assigneeId, comment: String(req.body.comment || '任务完成质量优秀，继续保持。'), points: Math.max(1, Math.min(30, Number(req.body.points) || 10)), date: new Date().toISOString().slice(0, 10) }
+  db.taskLikes.push(item); writeDb(db); ok(res, item, `点赞成功，已奖励 ${item.points} 积分`)
+})
+
 app.post('/api/desensitize', auth, (req, res) => ok(res, { text: desensitize(req.body.text) }))
 app.post('/api/task/split', auth, async (req, res) => ok(res, await splitWithAI(desensitize(req.body.text || ''), req.body.methods), '任务拆分完成'))
 
@@ -224,7 +260,14 @@ app.get('/api/work-logs', auth, (req, res) => {
 })
 app.post('/api/work-logs', auth, (req, res) => { const db = readDb(); const log = { id: nextId(db.workLogs), userId: req.user.id, ...req.body }; db.workLogs.push(log); writeDb(db); ok(res, log, '工作记录已保存') })
 app.delete('/api/work-logs/:id', auth, (req, res) => { const db = readDb(); db.workLogs = db.workLogs.filter((l) => l.id !== Number(req.params.id)); writeDb(db); ok(res, true, '记录已删除') })
-app.post('/api/reports/generate', auth, async (req, res) => { const db = readDb(); const logs = db.workLogs.filter((l) => l.userId === req.user.id && (!req.body.start || l.date >= req.body.start) && (!req.body.end || l.date <= req.body.end)); ok(res, await generateReportWithAI(logs, req.body.type || '周报'), '材料生成完成') })
+app.post('/api/reports/generate', auth, async (req, res) => {
+  const db = readDb(); const userId = Number(req.body.userId || (req.user.role === 'mentor' ? 1 : req.user.id)); const start = req.body.start; const end = req.body.end
+  const logs = db.workLogs.filter(log => log.userId === userId && (!start || log.date >= start) && (!end || log.date <= end))
+  const tasks = db.tasks.filter(task => task.assigneeId === userId && (!start || (task.completedAt || task.dueDate) >= start) && (!end || (task.completedAt || task.dueDate) <= end))
+  const facts = [...logs, ...tasks.map(task => ({ date: task.completedAt || task.dueDate, hours: task.startTime && task.endTime ? Math.max(.5, Number(task.endTime.slice(0, 2)) - Number(task.startTime.slice(0, 2))) : 1, content: `[任务·${task.status === 'done' ? '已完成' : `进度${task.progress}%`}] ${task.title}`, result: task.status === 'done' ? (task.mentorComment || task.standard) : `当前进度 ${task.progress}%`, source: 'task' }))]
+  const report = await generateReportWithAI(facts.sort((a, b) => a.date.localeCompare(b.date)), req.body.type || '周报')
+  ok(res, { ...report, sourceStats: { tasks: tasks.length, logs: logs.length }, range: { start, end }, user: db.users.find(user => user.id === userId)?.name }, '已自动汇总期限内工作并生成材料')
+})
 
 app.post('/api/reports/export', auth, async (req, res) => {
   const { content = '', format = 'docx', title = '工作周报' } = req.body
@@ -265,10 +308,12 @@ app.post('/api/reports/export', auth, async (req, res) => {
 
 app.get('/api/growth', auth, (req, res) => {
   const db = readDb(); const userId = Number(req.query.userId || req.user.id); const tasks = db.tasks.filter((t) => t.assigneeId === userId)
-  const points = tasks.reduce((sum, t) => sum + Math.round((t.points || 50) * t.progress / 100), 0)
+  const likes = db.taskLikes.filter(item => item.toId === userId)
+  const taskPoints = tasks.reduce((sum, t) => sum + Math.round((t.points || 50) * t.progress / 100), 0)
+  const bonusPoints = likes.reduce((sum, item) => sum + item.points, 0); const points = taskPoints + bonusPoints
   const rank = points > 600 ? '皇冠' : points >= 300 ? '太阳' : points >= 100 ? '月亮' : '星星'
   const next = points > 600 ? 800 : points >= 300 ? 600 : points >= 100 ? 300 : 100
-  ok(res, { points, rank, next, percent: Math.min(100, Math.round(points / next * 100)), weights: { schedule: 40, meeting: 25, practice: 20, supplement: 15 }, milestones: db.milestones.filter((m) => m.userId === userId), tasks })
+  ok(res, { points, taskPoints, bonusPoints, rank, next, percent: Math.min(100, Math.round(points / next * 100)), weights: { schedule: 40, meeting: 25, practice: 20, supplement: 15 }, milestones: db.milestones.filter((m) => m.userId === userId), tasks, likes })
 })
 
 const levelNames = ['未接触', '观察学习', '协助完成', '独立完成', '能够带教']
