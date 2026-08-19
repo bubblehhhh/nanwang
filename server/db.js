@@ -15,7 +15,8 @@ const seed = {
   ],
   loginAttempts: {},
   tasks: [
-    { id: 101, title: '完成220kV设备巡视记录', description: '按巡视规范完成一次设备检查并上传记录', priority: 'P1', workCategory: 'project', projectName: '220kV变电站运维提升项目', startTime: '09:00', endTime: '10:30', assigneeId: 1, assignee: '张三', creatorId: 3, source: '导师任务', status: 'doing', progress: 65, dueDate: today, standard: '巡视点位完整，异常项附照片', points: 80, method: '四象限法', skillIds: ['OPS-01', 'SAFE-01'], riskPoints: ['设备带电区域保持安全距离', '发现异常不得擅自处置'], evidenceRequired: ['巡视记录', '异常点照片'], createdAt: today }
+    { id: 101, title: '完成220kV设备巡视记录', description: '按巡视规范完成一次设备检查并上传记录', priority: 'P1', workCategory: 'project', projectName: '220kV变电站运维提升项目', startTime: '09:00', endTime: '10:30', assigneeId: 1, assignee: '张三', creatorId: 3, source: '导师任务', status: 'doing', progress: 65, dueDate: today, standard: '巡视点位完整，异常项附照片', points: 80, method: '四象限法', skillIds: ['OPS-01', 'SAFE-01'], riskPoints: ['设备带电区域保持安全距离', '发现异常不得擅自处置'], evidenceRequired: ['巡视记录', '异常点照片'], createdAt: today },
+    { id: 102, title: '安全工器具检查与台账更新', description: '完成班组安全工器具外观检查、有效期核对与台账更新', priority: 'P2', workCategory: 'daily', projectName: '日常工作', startTime: '14:00', endTime: '15:00', assigneeId: 1, assignee: '张三', creatorId: 3, source: '导师任务', status: 'done', progress: 100, dueDate: today, standard: '账物一致，异常项有记录和闭环责任人', points: 60, method: 'PDCA', skillIds: ['SAFE-01', 'DATA-01'], riskPoints: ['检查前确认工器具停用状态'], evidenceRequired: ['检查清单', '更新后台账'], createdAt: today, completedAt: today, mentorComment: '检查细致，台账记录完整。' }
   ],
   skillCatalog: [
     { id: 'SAFE-01', domain: '安全生产', name: '作业风险辨识与控制', description: '识别作业危险点并落实控制措施', targetLevel: 4, critical: true },
@@ -52,6 +53,11 @@ const seed = {
     { id: 401, fromId: 3, toId: 1, from: '李四', content: '今天辛苦了，记得提交培训心得哦。', time: `${today} 09:20` },
     { id: 402, fromId: 1, toId: 3, from: '张三', content: '收到师傅，巡视结束后马上整理。', time: `${today} 09:25` }
   ],
+  mentorNotes: [
+    { id: 451, mentorId: 3, toId: 1, content: '巡视前先核对风险预控卡，遇到不确定的异常现象先停、再报、后处置。', tone: 'safety', date: today },
+    { id: 452, mentorId: 3, toId: 2, content: '定值核验要把版本号和校验码同时留痕，完成后找我做一次双人复核。', tone: 'focus', date: today }
+  ],
+  taskLikes: [],
   emotions: [{ id: 501, userId: 1, date: today, mood: '开心' }],
   praise: [{ id: 601, from: '李四', toId: 1, content: '主动帮助同事排查问题，表现优秀。', style: '薪火橙', date: today }],
   gratitude: [{ id: 701, from: '张三', to: '李四', content: '感谢师傅耐心讲解设备巡视的风险点。', date: today }],
@@ -80,10 +86,15 @@ export function initDb() {
     for (const field of ['skillCatalog', 'competencyAssessments', 'safetyCases', 'weeklyReviews']) {
       if (!db[field]) { db[field] = seed[field]; changed = true }
     }
+    for (const field of ['mentorNotes', 'taskLikes']) {
+      if (!db[field]) { db[field] = seed[field]; changed = true }
+    }
+    if (!db.tasks.some(task => task.id === 102)) { db.tasks.push(seed.tasks[1]); changed = true }
     db.tasks.forEach(task => {
       if (!task.skillIds) { task.skillIds = task.workCategory === 'meeting' ? ['COOP-01'] : ['DATA-01']; changed = true }
       if (!task.riskPoints) { task.riskPoints = []; changed = true }
       if (!task.evidenceRequired) { task.evidenceRequired = ['工作记录']; changed = true }
+      if (!task.points) { task.points = ({ P0: 120, P1: 80, P2: 50, P3: 30 })[task.priority] || 50; changed = true }
     })
     if (changed) fs.writeFileSync(dataFile, JSON.stringify(db, null, 2), 'utf8')
   }
