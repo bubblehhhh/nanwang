@@ -39,7 +39,10 @@ export async function askDeepSeek(system, prompt, json = false) {
       }),
       signal: controller.signal
     })
-    if (!response.ok) throw new Error(`DeepSeek 服务返回 ${response.status}`)
+    if (!response.ok) {
+      const reasons = { 401: 'DeepSeek 密钥无效或已失效', 402: 'DeepSeek 账户额度不足', 429: 'DeepSeek 请求频率超限', 500: 'DeepSeek 服务暂时异常', 503: 'DeepSeek 服务繁忙' }
+      throw new Error(reasons[response.status] || `DeepSeek 服务返回 ${response.status}`)
+    }
     const data = await response.json()
     return data.choices?.[0]?.message?.content || ''
   } finally {
