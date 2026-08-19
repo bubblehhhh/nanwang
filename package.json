@@ -9,6 +9,7 @@
     "dev:server": "node --watch server/index.js",
     "start": "node server/index.js",
     "build": "vite build",
+    "build:offline": "npm run build && node scripts/build-offline.mjs",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
