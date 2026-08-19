@@ -50,10 +50,10 @@ onMounted(() => {
       <div class="watermark">南方电网公司 内部信息系统　涉密终端 请勿外泄</div>
     </main>
   </div>
-  <el-dialog v-model="keyDialog" title="首次配置 AI 服务" width="460" :close-on-click-modal="false" :close-on-press-escape="false" :show-close="false" append-to-body>
-    <p class="key-setup-tip">请输入 DeepSeek API 密钥。密钥仅保存在本机后端，设置成功后不再提示。</p>
+  <el-dialog v-model="keyDialog" title="配置 AI 服务" width="460" append-to-body>
+    <p class="key-setup-tip">请输入 DeepSeek API 密钥。也可以稍后配置，任务拆解和报告生成会暂时使用本地规则。</p>
     <el-input v-model="apiKey" type="password" show-password autocomplete="new-password" placeholder="sk-..." @keyup.enter="saveAiKey"/>
-    <template #footer><el-button type="primary" :loading="keySaving" :disabled="!apiKey.trim()" @click="saveAiKey">保存并继续</el-button></template>
+    <template #footer><el-button @click="keyDialog=false">稍后配置</el-button><el-button type="primary" :loading="keySaving" :disabled="!apiKey.trim()" @click="saveAiKey">保存密钥</el-button></template>
   </el-dialog>
 </template>
 

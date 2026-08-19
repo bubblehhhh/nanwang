@@ -5,7 +5,7 @@ import { Plus,Search,EditPen,CircleCheck,Star } from '@element-plus/icons-vue'
 import api,{errorText,unwrap} from '../api'
 import { useAuthStore } from '../store'
 
-const auth=useAuthStore();const tasks=ref([]);const users=ref([]);const skills=ref([]);const likes=ref([]);const viewMode=ref('groups');const filter=ref('all');const keyword=ref('');const dialog=ref(false);const progressDialog=ref(false);const active=ref(null);const apprenticeFilter=ref('all');const openPriorities=ref([])
+const auth=useAuthStore();const tasks=ref([]);const users=ref([]);const skills=ref([]);const likes=ref([]);const viewMode=ref('groups');const filter=ref('all');const keyword=ref('');const dialog=ref(false);const progressDialog=ref(false);const active=ref(null);const confirmedRisks=ref([]);const apprenticeFilter=ref('all');const openPriorities=ref([])
 const form=reactive({title:'',description:'',priority:'P1',workCategory:'daily',projectName:'日常工作',startTime:'09:00',endTime:'10:00',assigneeId:1,dueDate:new Date().toISOString().slice(0,10),standard:'',points:60,method:'WBS',source:'导师任务',skillIds:['SAFE-01'],riskText:'',evidenceText:'工作记录'})
 const statuses={todo:'待开始',doing:'进行中',verify:'待核销',done:'已完成'}
 const groupMeta={meeting:{title:'会议任务',desc:'由会议纪要、会议录音或会议行动项生成',icon:'会'},project:{title:'项目工作',desc:'专项、建设、改造和阶段性项目任务',icon:'项'},daily:{title:'日常工作',desc:'巡检、学习、培训和常规管理事项',icon:'常'}}
@@ -16,8 +16,8 @@ const apprenticeStats=computed(()=>users.value.map(user=>{const list=tasks.value
 const kanban=computed(()=>Object.entries(statuses).map(([status,title])=>({status,title,tasks:scopedTasks.value.filter(t=>t.status===status)})))
 async function load(){const dashboard=unwrap(await api.get('/dashboard'));tasks.value=unwrap(await api.get('/tasks'));users.value=dashboard.users.filter(u=>u.role==='apprentice');likes.value=dashboard.likes||[];skills.value=unwrap(await api.get('/capabilities',{params:{userId:users.value[0]?.id||1}})).skills}
 async function create(){try{form.source=form.workCategory==='meeting'?'会议行动项':'导师任务';const{riskText,evidenceText,...base}=form;const payload={...base,riskPoints:riskText.split(/[；;\n]/).map(v=>v.trim()).filter(Boolean),evidenceRequired:evidenceText.split(/[；;\n]/).map(v=>v.trim()).filter(Boolean)};await api.post('/tasks',payload);ElMessage.success('任务已发布并进入能力证据链');dialog.value=false;load()}catch(e){ElMessage.error(errorText(e))}}
-function openTask(task){active.value={...task,note:task.note||''};progressDialog.value=true}
-async function saveProgress(){await api.patch(`/tasks/${active.value.id}/progress`,{progress:active.value.progress,note:active.value.note});ElMessage.success('进度已更新');progressDialog.value=false;load()}
+function openTask(task){active.value={...task,note:task.note||''};confirmedRisks.value=[];progressDialog.value=true}
+async function saveProgress(){if(active.value.riskPoints?.length&&confirmedRisks.value.length!==active.value.riskPoints.length)return ElMessage.warning('请逐项确认执行前安全风险');await api.patch(`/tasks/${active.value.id}/progress`,{progress:active.value.progress,note:active.value.note});ElMessage.success('进度已更新');progressDialog.value=false;load()}
 async function verify(task,approved){const{value}=await ElMessageBox.prompt(approved?'请输入导师核销意见':'请输入退回原因',approved?'任务核销':'退回修改',{inputValue:approved?'符合完成标准，同意核销。':''});await api.post(`/tasks/${task.id}/verify`,{approved,comment:value});ElMessage.success(approved?'已核销并进入工作库':'已退回学员');load()}
 async function like(task){try{const{value}=await ElMessageBox.prompt('说明这项工作做得好的地方，反馈会同步给徒弟。','点赞并奖励积分',{inputValue:'任务完成质量优秀，过程记录完整，继续保持。',confirmButtonText:'点赞并奖励'});await api.post(`/tasks/${task.id}/like`,{comment:value,points:10});ElMessage.success('点赞已反馈给徒弟，并奖励10积分');load()}catch(e){if(e!=='cancel'&&e!=='close')ElMessage.error(errorText(e))}}
 const liked=task=>likes.value.some(item=>item.taskId===task.id)
@@ -173,7 +173,7 @@ onMounted(load)
 <el-input v-model="active.note" type="textarea" :rows="4" :disabled="auth.user?.role==='mentor'||active.status==='verify'||active.status==='done'" placeholder="说明完成情况、问题或需要的支持"/>
 <div class="standard">
 <small>完成标准</small>{{active.standard}}</div>
-<div v-if="active.riskPoints?.length" class="task-risk-box"><b>执行前安全确认</b><label v-for="risk in active.riskPoints" :key="risk"><el-checkbox/>{{risk}}</label></div>
+<div v-if="active.riskPoints?.length" class="task-risk-box"><b>执行前安全确认</b><el-checkbox-group v-model="confirmedRisks"><el-checkbox v-for="risk in active.riskPoints" :key="risk" :value="risk" :disabled="auth.user?.role==='mentor'||active.status==='verify'||active.status==='done'">{{risk}}</el-checkbox></el-checkbox-group></div>
 <div v-if="active.evidenceRequired?.length" class="task-evidence"><b>能力证据</b><el-tag v-for="item in active.evidenceRequired" :key="item" effect="plain">{{item}}</el-tag></div>
 </template>
 <template #footer>

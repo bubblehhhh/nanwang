@@ -1,13 +1,14 @@
 import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
 import Login from './views/Login.vue'
-import Dashboard from './views/DashboardEnhanced.vue'
-import TaskCenter from './views/TaskCenterEnhanced.vue'
-import SmartInput from './views/SmartInputEnhanced.vue'
-import Growth from './views/GrowthEnhanced.vue'
-import WorkLibrary from './views/WorkLibraryEnhanced.vue'
-import CareCenter from './views/CareCenterEnhanced.vue'
-import Toolbox from './views/Toolbox.vue'
-import CapabilityCenter from './views/CapabilityCenter.vue'
+
+const Dashboard = () => import('./views/DashboardEnhanced.vue')
+const TaskCenter = () => import('./views/TaskCenterEnhanced.vue')
+const SmartInput = () => import('./views/SmartInputEnhanced.vue')
+const Growth = () => import('./views/GrowthEnhanced.vue')
+const WorkLibrary = () => import('./views/WorkLibraryEnhanced.vue')
+const CareCenter = () => import('./views/CareCenterEnhanced.vue')
+const Toolbox = () => import('./views/Toolbox.vue')
+const CapabilityCenter = () => import('./views/CapabilityCenter.vue')
 
 const router = createRouter({ history: location.protocol === 'file:' ? createWebHashHistory() : createWebHistory(), routes: [
   { path: '/login', component: Login, meta: { public: true } },

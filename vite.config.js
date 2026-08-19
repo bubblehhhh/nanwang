@@ -4,7 +4,8 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   plugins: [vue()],
   build: {
-    outDir: 'web-dist'
+    outDir: 'web-dist',
+    chunkSizeWarningLimit: 700
   },
   server: {
     port: 5173,
