@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './store'
-import { House, List, MagicStick, Trophy, Document, Sunny, Tools, SwitchButton } from '@element-plus/icons-vue'
+import { House, List, MagicStick, Trophy, Document, Sunny, Tools, SwitchButton, Aim } from '@element-plus/icons-vue'
 import api, { errorText, unwrap } from './api'
 
 const route = useRoute(); const router = useRouter(); const auth = useAuthStore()
@@ -11,7 +11,7 @@ const isLogin = computed(() => route.path === '/login')
 const keyDialog = ref(false); const apiKey = ref(''); const keySaving = ref(false)
 const menus = [
   ['/', '工作台', House], ['/tasks', '任务中心', List], ['/smart-input', '智能拆解', MagicStick],
-  ['/growth', '成长档案', Trophy], ['/work-library', '工作库', Document], ['/care', '人文关怀', Sunny], ['/toolbox', '百宝箱', Tools]
+  ['/capabilities', '能力培养', Aim], ['/growth', '成长档案', Trophy], ['/work-library', '工作库', Document], ['/care', '人文关怀', Sunny], ['/toolbox', '百宝箱', Tools]
 ]
 function logout() { auth.logout(); router.push('/login') }
 async function checkAiKey() {
