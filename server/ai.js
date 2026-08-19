@@ -1,3 +1,11 @@
+const detectSource = (text = '') => {
+  if (/会议|例会|晨会|议题|参会|纪要|主持|发言/.test(text)) return { sourceType: 'meeting', sourceConfidence: 92, sourceReason: '识别到会议语义和行动项表达' }
+  if (/项目|专项|改造|建设|里程碑|交付|验收/.test(text)) return { sourceType: 'project', sourceConfidence: 88, sourceReason: '识别到项目目标、交付或里程碑语义' }
+  return { sourceType: 'daily', sourceConfidence: 76, sourceReason: '内容更符合日常工作或临时事项特征' }
+}
+
+const pointByPriority = { P0: 120, P1: 80, P2: 50, P3: 30 }
+
 const fallbackTasks = (text) => {
   const sentences = text.split(/[。；;\n]/).map((item) => item.trim()).filter(Boolean).slice(0, 6)
   return (sentences.length ? sentences : ['核对输入内容并形成执行清单']).map((item, index) => ({
@@ -6,7 +14,8 @@ const fallbackTasks = (text) => {
     priority: index === 0 ? 'P1' : 'P2',
     dueDate: new Date(Date.now() + (index + 1) * 86400000).toISOString().slice(0, 10),
     standard: '结果可核验、过程有记录、异常有说明',
-    method: '四象限法'
+    method: '四象限法',
+    points: index === 0 ? 80 : 50
   }))
 }
 
@@ -39,7 +48,7 @@ export async function splitWithAI(text, methods = ['WBS']) {
   try {
     const selectedMethods = methods.length ? methods.join('、') : 'WBS'
     const content = await askDeepSeek(
-      `你是供电局任务管理助手。仅拆分用户提供的工作内容，不编造人员或制度。使用用户选择的方法：${selectedMethods}。输出JSON对象，tasks为3到10个任务。每项包含title、description、priority(P0-P3)、dueDate(YYYY-MM-DD)、standard、method；method必须说明实际采用的方法。`,
+      `你是供电局任务管理助手。先把材料来源识别为meeting、project或daily，再拆分用户提供的工作内容，不编造人员或制度。使用用户选择的方法：${selectedMethods}。输出JSON对象，包含sourceType、sourceConfidence(0-100)、sourceReason和tasks。tasks为3到10个任务，每项包含title、description、priority(P0-P3)、dueDate(YYYY-MM-DD)、standard、method、points；method必须说明实际采用的方法，points按任务难度建议30到120积分。`,
       `科学拆解方法：${selectedMethods}\n待拆解内容：\n${text}`,
       true
     )
@@ -52,7 +61,8 @@ export async function splitWithAI(text, methods = ['WBS']) {
         priority: tasks.length === 0 ? 'P1' : 'P2',
         dueDate: new Date(Date.now() + (tasks.length + 1) * 86400000).toISOString().slice(0, 10),
         standard: '信息完整、结果可核验、过程有留痕',
-        method: 'WBS'
+        method: 'WBS',
+        points: tasks.length === 0 ? 80 : 50
       })
     }
     const normalized = tasks.map((task, index) => ({
@@ -61,11 +71,14 @@ export async function splitWithAI(text, methods = ['WBS']) {
       priority: ['P0', 'P1', 'P2', 'P3'].includes(task.priority) ? task.priority : 'P2',
       dueDate: /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate || '') ? task.dueDate : new Date(Date.now() + (index + 1) * 86400000).toISOString().slice(0, 10),
       standard: task.standard || '结果可核验、过程有记录、异常有说明',
-      method: task.method || 'WBS'
+      method: task.method || 'WBS',
+      points: Number(task.points) || pointByPriority[task.priority] || 50
     }))
-    return { tasks: normalized, ai: true }
+    const detected = detectSource(text)
+    const sourceType = ['meeting', 'project', 'daily'].includes(parsed.sourceType) ? parsed.sourceType : detected.sourceType
+    return { tasks: normalized, ai: true, sourceType, sourceConfidence: Number(parsed.sourceConfidence) || detected.sourceConfidence, sourceReason: parsed.sourceReason || detected.sourceReason }
   } catch (error) {
-    return { tasks: fallbackTasks(text), ai: false, warning: `AI暂不可用，已采用规则拆分：${error.message}` }
+    return { tasks: fallbackTasks(text), ai: false, ...detectSource(text), warning: `AI暂不可用，已采用规则拆分：${error.message}` }
   }
 }
 
