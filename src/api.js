@@ -6,7 +6,11 @@ api.interceptors.request.use((config) => {
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
-api.interceptors.response.use((response) => response, (error) => {
+api.interceptors.response.use((response) => {
+  const warning = response.data?.data?.warning || ''
+  if (warning.includes('DeepSeek 账户额度不足')) window.dispatchEvent(new CustomEvent('xinhuo-ai-quota'))
+  return response
+}, (error) => {
   if (error.response?.status === 401 && !location.pathname.includes('/login')) {
     localStorage.removeItem('xinhuo_token'); localStorage.removeItem('xinhuo_user'); location.href = '/login'
   }
