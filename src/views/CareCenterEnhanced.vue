@@ -3,7 +3,7 @@ import {computed,onBeforeUnmount,onMounted,ref} from 'vue'
 import {Bell,ChatDotRound,CoffeeCup,Medal,MostlyCloudy,Timer,CircleCheck,ArrowRight} from '@element-plus/icons-vue'
 import {ElMessage} from 'element-plus'
 import api,{errorText,unwrap} from '../api';import{useAuthStore}from'../store'
-const auth=useAuthStore(),care=ref({messages:[],praise:[],users:[],actions:[],emotion:null}),dialog=ref(''),chatText=ref(''),praiseText=ref(''),selectedUserId=ref(null),focusSeconds=ref(1500),focusRunning=ref(false);let timer
+const auth=useAuthStore(),care=ref({messages:[],praise:[],users:[],actions:[],emotion:null}),dialog=ref(false),chatText=ref(''),praiseText=ref(''),selectedUserId=ref(null),focusSeconds=ref(1500),focusRunning=ref(false);let timer
 const today=new Date().toISOString().slice(0,10),moods=['开心','平静','疲惫','焦虑','其他']
 const apprentices=computed(()=>care.value.users.filter(u=>u.role==='apprentice')),counterpart=computed(()=>auth.user?.role==='mentor'?care.value.users.find(u=>u.id===Number(selectedUserId.value)):care.value.users.find(u=>u.id===auth.user?.mentorId))
 const messages=computed(()=>care.value.messages.filter(m=>counterpart.value&&((m.fromId===auth.user.id&&m.toId===counterpart.value.id)||(m.toId===auth.user.id&&m.fromId===counterpart.value.id))).sort((a,b)=>String(a.time).localeCompare(String(b.time))))
