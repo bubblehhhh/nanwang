@@ -323,9 +323,11 @@ const capabilitySnapshot = (db, userId) => {
   const skills = db.skillCatalog.map(skill => {
     const assessment = latestAssessment(db, userId, skill.id)
     const relatedTasks = db.tasks.filter(task => task.assigneeId === Number(userId) && task.skillIds?.includes(skill.id))
-    const evidenceCount = Math.max(assessment?.evidenceCount || 0, relatedTasks.filter(task => task.status === 'done').length)
+    const completedTasks = relatedTasks.filter(task => task.status === 'done')
+    const evidenceSources = completedTasks.map(task => ({ taskId: task.id, title: task.title, completedAt: task.completedAt || task.dueDate, items: task.evidenceRequired || ['工作记录'], mentorComment: task.mentorComment || '' }))
+    const evidenceCount = evidenceSources.length
     const level = assessment?.level || 1
-    return { ...skill, level, levelName: levelNames[level - 1], gap: Math.max(0, skill.targetLevel - level), evidenceCount, assessment, relatedTaskCount: relatedTasks.length }
+    return { ...skill, level, levelName: levelNames[level - 1], gap: Math.max(0, skill.targetLevel - level), evidenceCount, evidenceSources, assessment, relatedTaskCount: relatedTasks.length, completedTaskCount: completedTasks.length }
   })
   const readiness = Math.round(skills.reduce((sum, skill) => sum + Math.min(skill.level / skill.targetLevel, 1), 0) / skills.length * 100)
   return { user: user && (({ password, ...safe }) => safe)(user), readiness, skills, gaps: skills.filter(skill => skill.gap > 0).sort((a,b) => Number(b.critical) - Number(a.critical) || b.gap - a.gap) }
@@ -344,11 +346,12 @@ app.get('/api/capabilities', auth, (req, res) => {
 app.post('/api/capabilities/:userId/assess', auth, (req, res) => {
   if (req.user.role !== 'mentor') return fail(res, 403, '只有师傅可以进行能力认证')
   const db = readDb(); const userId = Number(req.params.userId); const skill = db.skillCatalog.find(item => item.id === req.body.skillId)
-  const level = Number(req.body.level); const evidenceCount = Number(req.body.evidenceCount || 0)
+  const level = Number(req.body.level)
   if (!db.users.some(item => item.id === userId && item.role === 'apprentice') || !skill) return fail(res, 400, '学员或技能不存在')
   if (level < 1 || level > 5) return fail(res, 400, '能力等级必须在1至5级之间')
-  if (level >= 4 && evidenceCount < 2) return fail(res, 400, '认证为独立完成或能够带教至少需要2项有效证据')
-  const item = { id: nextId(db.competencyAssessments), userId, skillId: skill.id, level, evidenceCount, assessorId: req.user.id, comment: String(req.body.comment || ''), date: new Date().toISOString().slice(0,10) }
+  const evidenceCount = db.tasks.filter(task => task.assigneeId === userId && task.status === 'done' && task.skillIds?.includes(skill.id)).length
+  if (level >= 4 && evidenceCount < 2) return fail(res, 400, `认证为独立完成或能够带教至少需要2项已核销工作证据，当前自动统计为${evidenceCount}项`)
+  const item = { id: nextId(db.competencyAssessments), userId, skillId: skill.id, level, evidenceCount, evidenceSource: 'completed_tasks', assessorId: req.user.id, comment: String(req.body.comment || ''), date: new Date().toISOString().slice(0,10) }
   db.competencyAssessments.push(item); writeDb(db); ok(res, item, '能力认证已保存')
 })
 
