@@ -62,6 +62,7 @@ function desensitize(text = '') {
 const apiCatalog = [
   ['系统', 'GET', '/api/health', '检查后端与AI配置状态'],
   ['系统', 'POST', '/api/settings/ai-key', '首次保存后端AI密钥'],
+  ['系统', 'PUT', '/api/settings/ai-key', '验证并更换后端AI密钥'],
   ['认证', 'POST', '/api/auth/login', '用户登录与角色校验'],
   ['工作台', 'GET', '/api/dashboard', '获取工作台统计、任务和人员'],
   ['工作台', 'GET', '/api/weather/hourly', '获取逐小时温度和降雨概率'],
@@ -114,6 +115,22 @@ app.post('/api/settings/ai-key', (req, res) => {
   fs.writeFileSync(aiSettingsFile, JSON.stringify({ apiKey }, null, 2), { encoding: 'utf8', mode: 0o600 })
   process.env.DEEPSEEK_API_KEY = apiKey
   ok(res, { configured: true }, 'AI密钥设置成功')
+})
+
+app.put('/api/settings/ai-key', auth, async (req, res) => {
+  const apiKey = String(req.body.apiKey || '').trim()
+  if (!/^sk-[A-Za-z0-9_-]{20,}$/.test(apiKey)) return fail(res, 400, '请输入有效的DeepSeek API密钥')
+  try {
+    const response = await fetch('https://api.deepseek.com/user/balance', { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(8000) })
+    if (response.status === 401) return fail(res, 400, '新密钥认证失败，请检查后重试')
+    if (!response.ok) return fail(res, response.status, `DeepSeek密钥验证失败（${response.status}）`)
+    const balance = await response.json()
+    if (!balance.is_available) return fail(res, 402, '新密钥账户余额不足，请充值或更换其他密钥')
+    fs.mkdirSync(path.dirname(aiSettingsFile), { recursive: true })
+    fs.writeFileSync(aiSettingsFile, JSON.stringify({ apiKey }, null, 2), { encoding: 'utf8', mode: 0o600 })
+    process.env.DEEPSEEK_API_KEY = apiKey
+    ok(res, { configured: true, available: true }, '新密钥验证通过并已启用')
+  } catch (error) { fail(res, 502, `无法验证DeepSeek密钥：${error.message}`) }
 })
 
 app.post('/api/auth/login', (req, res) => {
