@@ -151,7 +151,11 @@ app.get('/api/dashboard', auth, (req, res) => {
   const visibleIds = req.user.role === 'mentor' ? db.users.filter(user => user.role === 'apprentice').map(user => user.id) : [req.user.id]
   const likes = db.taskLikes.filter(item => visibleIds.includes(item.toId)).sort((a, b) => b.id - a.id)
   const notes = db.mentorNotes.filter(item => req.user.role === 'mentor' ? item.mentorId === req.user.id : item.toId === req.user.id).sort((a, b) => b.id - a.id)
-  ok(res, { tasks: scope, stats: { total: scope.length, completed, progress, due: scope.filter((t) => t.dueDate <= new Date().toISOString().slice(0, 10) && t.status !== 'done').length, points: scope.reduce((sum, task) => sum + Math.round((task.points || 50) * task.progress / 100), 0), likes: likes.length }, workload, notes, likes, users: db.users.map(({ password, ...u }) => u), milestones: db.milestones })
+  const monday = new Date(); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); const weekStart = monday.toISOString().slice(0, 10)
+  const weeklyTaskPoints = scope.filter(task => task.status === 'done' && (task.completedAt || task.dueDate) >= weekStart).reduce((sum, task) => sum + (task.points || 50), 0)
+  const weeklyLikePoints = likes.filter(item => item.date >= weekStart).reduce((sum, item) => sum + item.points, 0)
+  const pendingPoints = scope.filter(task => task.status !== 'done').reduce((sum, task) => sum + Math.max(0, (task.points || 50) - Math.round((task.points || 50) * task.progress / 100)), 0)
+  ok(res, { tasks: scope, stats: { total: scope.length, completed, progress, due: scope.filter((t) => t.dueDate <= new Date().toISOString().slice(0, 10) && t.status !== 'done').length, points: scope.reduce((sum, task) => sum + Math.round((task.points || 50) * task.progress / 100), 0) + likes.reduce((sum, item) => sum + item.points, 0), weeklyPoints: weeklyTaskPoints + weeklyLikePoints, pendingPoints, likes: likes.length }, workload, notes, likes, users: db.users.map(({ password, ...u }) => u), milestones: db.milestones })
 })
 
 app.get('/api/weather/hourly', auth, async (_req, res) => {
