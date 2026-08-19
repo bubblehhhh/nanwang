@@ -15,10 +15,7 @@ const seed = {
   ],
   loginAttempts: {},
   tasks: [
-    { id: 101, title: '完成220kV设备巡视记录', description: '按巡视规范完成一次设备检查并上传记录', priority: 'P1', workCategory: 'project', projectName: '220kV变电站运维提升项目', startTime: '09:00', endTime: '10:30', assigneeId: 1, assignee: '张三', creatorId: 3, source: '导师任务', status: 'doing', progress: 65, dueDate: today, standard: '巡视点位完整，异常项附照片', points: 80, method: '四象限法', createdAt: today },
-    { id: 102, title: '提交制度学习第2章心得', description: '完成安全规程第二章学习并整理关键风险点', priority: 'P2', workCategory: 'daily', projectName: '日常学习与培训', startTime: '15:30', endTime: '16:30', assigneeId: 1, assignee: '张三', creatorId: 3, source: '个人日程', status: 'todo', progress: 20, dueDate: today, standard: '不少于500字，列出3项风险', points: 50, method: 'WBS', createdAt: today },
-    { id: 103, title: '继保装置定值核验', description: '完成保护装置定值单与现场参数核对', priority: 'P0', workCategory: 'meeting', projectName: '生产协调会行动项', startTime: '10:30', endTime: '12:00', assigneeId: 2, assignee: '赵六', creatorId: 3, source: '会议行动项', status: 'verify', progress: 100, dueDate: today, standard: '双人复核，差异为零', points: 100, method: 'WBS', createdAt: today },
-    { id: 104, title: '安全工器具检查', description: '完成绝缘手套、验电器有效期检查', priority: 'P1', workCategory: 'meeting', projectName: '班组周例会行动项', startTime: '08:15', endTime: '09:00', assigneeId: 1, assignee: '张三', creatorId: 3, source: '会议行动项', status: 'done', progress: 100, dueDate: today, standard: '检查项全部留痕', points: 60, method: '四象限法', createdAt: today, completedAt: today }
+    { id: 101, title: '完成220kV设备巡视记录', description: '按巡视规范完成一次设备检查并上传记录', priority: 'P1', workCategory: 'project', projectName: '220kV变电站运维提升项目', startTime: '09:00', endTime: '10:30', assigneeId: 1, assignee: '张三', creatorId: 3, source: '导师任务', status: 'doing', progress: 65, dueDate: today, standard: '巡视点位完整，异常项附照片', points: 80, method: '四象限法', createdAt: today }
   ],
   workLogs: [
     { id: 201, userId: 1, date: today, hours: 2.5, content: '完成变电站一次设备巡视，核查12个点位，发现并闭环1项标识问题。', result: '12个点位完成，1项问题闭环', tags: ['巡视', '安全'] },
