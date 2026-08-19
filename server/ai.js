@@ -32,7 +32,7 @@ export async function askDeepSeek(system, prompt, json = false) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({
-        model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+        model: process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash',
         temperature: 0.25,
         response_format: json ? { type: 'json_object' } : undefined,
         messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }]
