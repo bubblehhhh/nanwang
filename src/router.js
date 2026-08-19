@@ -5,7 +5,7 @@ import TaskCenter from './views/TaskCenterEnhanced.vue'
 import SmartInput from './views/SmartInputEnhanced.vue'
 import Growth from './views/GrowthEnhanced.vue'
 import WorkLibrary from './views/WorkLibraryEnhanced.vue'
-import CareCenter from './views/CareCenter.vue'
+import CareCenter from './views/CareCenterEnhanced.vue'
 import Toolbox from './views/Toolbox.vue'
 import CapabilityCenter from './views/CapabilityCenter.vue'
 
