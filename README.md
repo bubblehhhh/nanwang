@@ -58,6 +58,10 @@ npm run dev
 
 GitHub 负责源码协作，不会自动运行 Express 后端；需要完成云端部署后，网站才能通过公网地址访问。
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/bubblehhhh/nanwang)
+
+点击上方按钮可部署完整在线版。创建服务时填写 `DEEPSEEK_API_KEY`，其余构建、启动和健康检查配置由仓库中的 `render.yaml` 自动完成。
+
 ## 数据与文件
 
 - 演示数据首次运行时写入 `server/data/db.json`。
