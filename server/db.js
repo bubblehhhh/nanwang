@@ -98,7 +98,7 @@ export function initDb() {
       if (!task.skillIds) { task.skillIds = task.workCategory === 'meeting' ? ['COOP-01'] : ['DATA-01']; changed = true }
       if (!task.riskPoints) { task.riskPoints = []; changed = true }
       if (!task.evidenceRequired) { task.evidenceRequired = ['工作记录']; changed = true }
-      if (!task.points) { task.points = ({ P0: 120, P1: 80, P2: 50, P3: 30 })[task.priority] || 50; changed = true }
+      if (!task.points) { task.points = ({ P1: 80, P2: 50 })[task.priority] || 50; changed = true }
     })
     if (changed) fs.writeFileSync(dataFile, JSON.stringify(db, null, 2), 'utf8')
   }

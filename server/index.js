@@ -72,7 +72,8 @@ const apiCatalog = [
   ['任务', 'PATCH', '/api/tasks/:id/progress', '任务负责人更新进度'],
   ['任务', 'POST', '/api/tasks/:id/verify', '师傅手动核销或退回任务'],
   ['任务', 'POST', '/api/tasks/:id/like', '师傅点赞优秀任务并奖励积分'],
-  ['智能处理', 'POST', '/api/file/upload', '上传并解析工作文件'],
+  ['任务', 'GET', '/api/tasks/member-summary', '组员待完成任务可视化统计'],
+  ['智能处理', 'POST', '/api/file/upload', '多模态文件上传与解析'],
   ['智能处理', 'POST', '/api/desensitize', '敏感文本脱敏'],
   ['智能处理', 'POST', '/api/task/split', '使用科学方法与AI拆解任务'],
   ['工作库', 'GET', '/api/work-logs', '查询工作历史记录'],
@@ -195,7 +196,7 @@ app.get('/api/dashboard', auth, (req, res) => {
   const dates = Array.from({ length: 35 }, (_, index) => new Date(Date.now() + (index - 17) * 86400000).toISOString().slice(0, 10))
   const workload = dates.map(date => {
     const daily = scope.filter(task => task.dueDate === date || task.createdAt === date || task.completedAt === date)
-    const score = daily.reduce((sum, task) => sum + ({ P0: 4, P1: 3, P2: 2, P3: 1 })[task.priority], 0)
+    const score = daily.reduce((sum, task) => sum + ({ P1: 3, P2: 2 })[task.priority], 0)
     return { date, taskCount: daily.length, workload: score, level: Math.min(4, Math.ceil(score / 2)) }
   })
   const visibleIds = req.user.role === 'mentor' ? db.users.filter(user => user.role === 'apprentice').map(user => user.id) : [req.user.id]
@@ -234,7 +235,7 @@ app.post('/api/tasks', auth, (req, res) => {
   const assignee = db.users.find((u) => u.id === Number(req.body.assigneeId))
   if (!assignee) return fail(res, 400, '请选择有效的任务负责人')
   if (!Array.isArray(req.body.skillIds) || !req.body.skillIds.length) return fail(res, 400, '任务必须关联至少一项岗位技能')
-  if (['P0', 'P1'].includes(req.body.priority) && (!Array.isArray(req.body.riskPoints) || !req.body.riskPoints.length)) return fail(res, 400, 'P0/P1任务必须填写安全风险点')
+  if (req.body.priority === 'P1' && (!Array.isArray(req.body.riskPoints) || !req.body.riskPoints.length)) return fail(res, 400, 'P1任务必须填写安全风险点')
   if (db.tasks.some((item) => taskKey(item) === taskKey(req.body))) return fail(res, 409, '该负责人已存在同名任务，不能重复发布')
   const task = { id: nextId(db.tasks), ...req.body, assigneeId: assignee.id, assignee: assignee.name, creatorId: req.user.id, progress: 0, status: 'todo', createdAt: new Date().toISOString().slice(0, 10) }
   db.tasks.push(task); writeDb(db); ok(res, task, '任务已发布')
@@ -285,6 +286,43 @@ app.post('/api/tasks/:id/like', auth, (req, res) => {
   if (db.taskLikes.some(item => item.taskId === task.id && item.fromId === req.user.id)) return fail(res, 409, '该任务已经点赞，不能重复奖励')
   const item = { id: nextId(db.taskLikes), taskId: task.id, taskTitle: task.title, fromId: req.user.id, from: req.user.name, toId: task.assigneeId, comment: String(req.body.comment || '任务完成质量优秀，继续保持。'), points: Math.max(1, Math.min(30, Number(req.body.points) || 10)), date: new Date().toISOString().slice(0, 10) }
   db.taskLikes.push(item); writeDb(db); ok(res, item, `点赞成功，已奖励 ${item.points} 积分`)
+})
+
+app.get('/api/tasks/member-summary', auth, (req, res) => {
+  if (req.user.role !== 'mentor') return fail(res, 403, '只有组长可以查看组员任务概览')
+  const db = readDb()
+  const apprentices = db.users.filter((u) => u.role === 'apprentice')
+  const summary = apprentices.map((user) => {
+    const userTasks = db.tasks.filter((t) => t.assigneeId === user.id)
+    const pending = userTasks.filter((t) => t.status !== 'done')
+    const byStatus = {
+      todo: pending.filter((t) => t.status === 'todo').length,
+      doing: pending.filter((t) => t.status === 'doing').length,
+      verify: pending.filter((t) => t.status === 'verify').length
+    }
+    const byPriority = {
+      P1: userTasks.filter((t) => t.priority === 'P1').length,
+      P2: userTasks.filter((t) => t.priority === 'P2').length
+    }
+    const byPriorityStatus = {
+      P1: { todo: userTasks.filter((t) => t.priority === 'P1' && t.status === 'todo').length, doing: userTasks.filter((t) => t.priority === 'P1' && t.status === 'doing').length, verify: userTasks.filter((t) => t.priority === 'P1' && t.status === 'verify').length, done: userTasks.filter((t) => t.priority === 'P1' && t.status === 'done').length },
+      P2: { todo: userTasks.filter((t) => t.priority === 'P2' && t.status === 'todo').length, doing: userTasks.filter((t) => t.priority === 'P2' && t.status === 'doing').length, verify: userTasks.filter((t) => t.priority === 'P2' && t.status === 'verify').length, done: userTasks.filter((t) => t.priority === 'P2' && t.status === 'done').length }
+    }
+    return {
+      userId: user.id,
+      userName: user.name,
+      position: user.position,
+      total: userTasks.length,
+      pending: pending.length,
+      completed: userTasks.length - pending.length,
+      avgProgress: userTasks.length ? Math.round(userTasks.reduce((s, t) => s + (t.progress || 0), 0) / userTasks.length) : 0,
+      byStatus,
+      byPriority,
+      byPriorityStatus,
+      tasks: pending.map((t) => ({ id: t.id, title: t.title, status: t.status, priority: t.priority, progress: t.progress, dueDate: t.dueDate }))
+    }
+  })
+  ok(res, summary)
 })
 
 app.post('/api/desensitize', auth, (req, res) => ok(res, { text: desensitize(req.body.text) }))
