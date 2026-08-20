@@ -41,3 +41,29 @@
 @media(max-width:800px){.source-type-bar{align-items:flex-start;flex-direction:column}.week-switch{overflow-x:auto;grid-template-columns:repeat(7,90px)}.day-agenda article{grid-template-columns:58px 4px 1fr}.agenda-progress{grid-column:3;grid-template-columns:1fr 64px}.schedule-legend{display:none}}
 @media(max-width:520px){.day-agenda article{grid-template-columns:52px 3px 1fr}.agenda-progress{grid-column:1/-1;margin-left:68px}.source-type-bar .el-radio-group{display:grid;grid-template-columns:1fr;width:100%}.source-type-bar .el-radio-button{width:100%}.source-type-bar .el-radio-button__inner{width:100%}}
 
+/* Sidebar avatar clickable */
+.sidebar-foot .mini-avatar{cursor:pointer;transition:transform .15s}
+.sidebar-foot .mini-avatar:hover{transform:scale(1.1)}
+.sidebar-foot .sidebar-foot-info{cursor:pointer}
+
+/* Profile page */
+.profile-layout{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.profile-avatar-section{display:flex;gap:20px;align-items:center;margin-bottom:20px}
+.profile-avatar-preview{width:80px;height:80px;border-radius:50%;display:grid;place-items:center;font-size:34px;font-weight:700;color:#fff;flex-shrink:0}
+.profile-info h2{margin:0 0 6px;font-size:20px}
+.profile-info p{margin:0 0 10px;color:var(--muted);font-size:13px}
+.profile-tags{display:flex;gap:8px;flex-wrap:wrap}
+.avatar-picker{padding:18px 0;border-top:1px solid #edf0f4;margin-bottom:18px}
+.picker-label{display:block;font-size:11px;color:var(--muted);margin:0 0 10px;font-weight:600}
+.avatar-chars{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.avatar-chars button{width:40px;height:40px;border-radius:50%;border:2px solid var(--line);background:#fff;font-size:16px;font-weight:700;cursor:pointer;transition:border-color .15s}
+.avatar-chars button:hover{border-color:var(--blue)}
+.avatar-chars button.active{border-color:var(--blue);background:#eaf2ff;color:var(--blue)}
+.avatar-colors{display:flex;gap:8px;flex-wrap:wrap}
+.avatar-colors button{width:36px;height:36px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);color:#fff;cursor:pointer;transition:transform .15s;display:grid;place-items:center}
+.avatar-colors button:hover{transform:scale(1.15)}
+.avatar-colors button.active{box-shadow:0 0 0 2px var(--blue)}
+.pwd-form{margin-bottom:18px}
+.pwd-form .el-form-item{margin-bottom:16px}
+@media(max-width:900px){.profile-layout{grid-template-columns:1fr}}
+

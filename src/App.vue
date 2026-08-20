@@ -46,7 +46,7 @@ onBeforeUnmount(()=>window.removeEventListener('xinhuo-ai-quota',showQuotaDialog
       <nav>
         <router-link v-for="[path,label,icon] in menus" :key="path" :to="path"><el-icon><component :is="icon" /></el-icon><span>{{ label }}</span></router-link>
       </nav>
-      <div class="sidebar-foot"><div class="mini-avatar">{{ auth.user?.avatar }}</div><div><b>{{ auth.user?.name }}</b><small>{{ auth.user?.roleName }} · {{ auth.user?.position }}</small></div><el-button text circle @click="logout"><el-icon><SwitchButton /></el-icon></el-button></div>
+      <div class="sidebar-foot"><div class="mini-avatar" :style="{ background: auth.user?.avatarColor || '' }" @click="router.push('/profile')" title="点击进入个人设置">{{ auth.user?.avatar }}</div><div class="sidebar-foot-info" @click="router.push('/profile')" title="点击进入个人设置"><b>{{ auth.user?.name }}</b><small>{{ auth.user?.roleName }} · {{ auth.user?.position }}</small></div><el-button text circle @click="logout"><el-icon><SwitchButton /></el-icon></el-button></div>
     </aside>
     <main class="main-area">
       <header class="topbar"><div><span class="crumb">南网·薪火</span><span>/</span><b>{{ route.meta.title || menus.find(m => m[0] === route.path)?.[1] }}</b></div><div class="top-actions"><el-tag type="success" effect="plain">系统运行正常</el-tag><span>{{ new Date().toLocaleDateString('zh-CN', { month:'long', day:'numeric', weekday:'short' }) }}</span></div></header>

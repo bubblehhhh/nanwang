@@ -14,6 +14,24 @@ const scopedTasks=computed(()=>filtered.value.filter(t=>auth.user?.role!=='mento
 const workGroups=computed(()=>['meeting','project','daily'].map(category=>{const list=scopedTasks.value.filter(t=>(/会议/.test(`${t.source}${t.projectName}`)?'meeting':t.workCategory)===category);return{category,...groupMeta[category],tasks:list,priorities:['P1','P2'].map(priority=>({priority,tasks:list.filter(t=>t.priority===priority)})).filter(g=>g.tasks.length)}}).filter(g=>g.tasks.length))
 const apprenticeStats=computed(()=>users.value.map(user=>{const list=tasks.value.filter(t=>t.assigneeId===user.id);return{...user,total:list.length,verify:list.filter(t=>t.status==='verify').length,progress:list.length?Math.round(list.reduce((s,t)=>s+t.progress,0)/list.length):0}}))
 const kanban=computed(()=>Object.entries(statuses).map(([status,title])=>({status,title,tasks:scopedTasks.value.filter(t=>t.status===status)})))
+const projectGroups=computed(()=>{
+  const map={}
+  scopedTasks.value.forEach(t=>{
+    const pn=t.projectName||'未分类'
+    if(!map[pn])map[pn]={projectName:pn,tasks:[],sources:{}}
+    map[pn].tasks.push(t)
+    const src=t.source||'导师任务'
+    const srcKey=/会议/.test(src)?'meeting':'manual'
+    if(!map[pn].sources[srcKey])map[pn].sources[srcKey]={label:srcKey==='meeting'?'会议纪要发布':'主动发布',tasks:[]}
+    map[pn].sources[srcKey].tasks.push(t)
+  })
+  return Object.values(map).map(g=>({
+    ...g,
+    progress:g.tasks.length?Math.round(g.tasks.reduce((s,t)=>s+t.progress,0)/g.tasks.length):0,
+    sourceList:Object.values(g.sources),
+    workCategory:g.tasks[0]?.workCategory||'daily'
+  })).sort((a,b)=>b.tasks.length-a.tasks.length)
+})
 async function load(){const dashboard=unwrap(await api.get('/dashboard'));tasks.value=unwrap(await api.get('/tasks'));users.value=dashboard.users.filter(u=>u.role==='apprentice');likes.value=dashboard.likes||[];skills.value=unwrap(await api.get('/capabilities',{params:{userId:users.value[0]?.id||1}})).skills}
 async function create(){try{form.source=form.workCategory==='meeting'?'会议行动项':'导师任务';const{riskText,evidenceText,...base}=form;const payload={...base,riskPoints:riskText.split(/[；;\n]/).map(v=>v.trim()).filter(Boolean),evidenceRequired:evidenceText.split(/[；;\n]/).map(v=>v.trim()).filter(Boolean)};await api.post('/tasks',payload);ElMessage.success('任务已发布并进入能力证据链');dialog.value=false;load()}catch(e){ElMessage.error(errorText(e))}}
 function openTask(task){active.value={...task,note:task.note||''};progressDialog.value=true}
@@ -57,10 +75,49 @@ onMounted(load)
 <el-option v-for="u in users" :key="u.id" :label="u.name" :value="String(u.id)"/>
 </el-select>
 <el-segmented v-model="filter" :options="[{label:'全部',value:'all'},{label:'待开始',value:'todo'},{label:'进行中',value:'doing'},{label:'待核销',value:'verify'},{label:'已完成',value:'done'}]"/>
-<el-segmented v-model="viewMode" :options="[{label:'分组列表',value:'groups'},{label:'状态看板',value:'board'}]"/>
+<el-segmented v-model="viewMode" :options="[{label:'分组列表',value:'groups'},{label:'项目视图',value:'projects'},{label:'状态看板',value:'board'}]"/>
 </div>
 <div v-if="viewMode==='board'" class="office-kanban">
 <section v-for="column in kanban" :key="column.status" :class="column.status"><header><b>{{column.title}}</b><span>{{column.tasks.length}}</span></header><div class="kanban-stack"><article v-for="task in column.tasks" :key="task.id"><div class="kanban-top"><el-tag size="small" :type="task.priority==='P1'?'warning':'primary'">{{task.priority}}</el-tag><strong>+{{task.points||50}} 积分</strong></div><h3>{{task.title}}</h3><p>{{task.projectName}} · {{task.assignee}}</p><el-progress :percentage="task.progress" :stroke-width="6"/><footer><small>截止 {{task.dueDate}}</small><div><el-button v-if="auth.user?.role==='mentor'&&task.status==='verify'" text type="success" @click="verify(task,true)">核销</el-button><el-button v-if="auth.user?.role==='mentor'&&task.status==='done'" text :type="liked(task)?'success':'primary'" :icon="Star" :disabled="liked(task)" @click="like(task)">{{liked(task)?'已点赞':'点赞'}}</el-button><el-button v-else-if="auth.user?.role==='apprentice'&&task.status!=='verify'&&task.status!=='done'" text @click="openTask(task)">更新</el-button></div></footer></article></div></section>
+</div>
+<div v-else-if="viewMode==='projects'" class="project-view">
+<div v-for="pg in projectGroups" :key="pg.projectName" class="project-card">
+<header class="project-header">
+<div class="project-icon" :class="pg.workCategory">{{pg.workCategory==='meeting'?'会':pg.workCategory==='project'?'项':'常'}}</div>
+<div class="project-title">
+<b>{{pg.projectName}}</b>
+<span>{{pg.tasks.length}} 项任务 · 进度 {{pg.progress}}%</span>
+</div>
+<el-progress :percentage="pg.progress" :stroke-width="7" style="width:120px"/>
+</header>
+<div v-for="src in pg.sourceList" :key="src.label" class="source-section">
+<div class="source-label">
+<el-tag :type="src.label==='会议纪要发布'?'warning':'primary'" effect="plain" size="small">{{src.label}}</el-tag>
+<span>{{src.tasks.length}} 项</span>
+</div>
+<div class="project-task-list">
+<div v-for="task in src.tasks" :key="task.id" class="project-task-row">
+<el-tag size="small" :type="task.priority==='P0'?'danger':task.priority==='P1'?'warning':'primary'">{{task.priority}}</el-tag>
+<div class="project-task-main">
+<b>{{task.title}}</b>
+<span>{{task.assignee}} · 截止 {{task.dueDate}} · {{task.points||50}} 积分</span>
+</div>
+<el-progress :percentage="task.progress" :stroke-width="6" style="width:80px"/>
+<span class="status" :class="task.status">{{statuses[task.status]}}</span>
+<div class="compact-actions">
+<template v-if="auth.user?.role==='mentor'&&task.status==='verify'">
+<el-button size="small" @click="verify(task,false)">退回</el-button>
+<el-button size="small" type="success" :icon="CircleCheck" @click="verify(task,true)">核销</el-button>
+</template>
+<el-button v-else-if="auth.user?.role==='apprentice'&&task.status!=='done'&&task.status!=='verify'" size="small" type="primary" plain :icon="EditPen" @click="openTask(task)">更新</el-button>
+<el-button v-else-if="auth.user?.role==='mentor'&&task.status==='done'" size="small" :type="liked(task)?'success':'primary'" plain :icon="Star" :disabled="liked(task)" @click="like(task)">{{liked(task)?'已点赞':'点赞'}}</el-button>
+<el-button v-else text size="small" @click="openTask(task)">详情</el-button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<el-empty v-if="!projectGroups.length" description="暂无项目任务"/>
 </div>
 <div v-else class="work-group-list">
 <section v-for="work in workGroups" :key="work.category" class="work-group">
@@ -184,6 +241,8 @@ onMounted(load)
 </div>
 </template>
 <style scoped>
-.office-kanban{display:grid;grid-template-columns:repeat(4,minmax(210px,1fr));gap:10px;align-items:start;overflow:auto}.office-kanban>section{background:#f4f6f8;border:1px solid #e1e6eb;min-height:420px;padding:10px}.office-kanban>section>header{display:flex;justify-content:space-between;padding:4px 3px 11px}.office-kanban>section>header span{background:#dfe5ea;min-width:22px;text-align:center;border-radius:3px}.kanban-stack{display:flex;flex-direction:column;gap:8px}.kanban-stack article{background:#fff;border:1px solid #e0e5ea;border-top:3px solid #8693a5;padding:11px}.office-kanban .doing article{border-top-color:#2b77c0}.office-kanban .verify article{border-top-color:#e1a125}.office-kanban .done article{border-top-color:#087c66}.kanban-top,article footer{display:flex;justify-content:space-between;align-items:center}.kanban-top strong{font-size:10px;color:#087c66}.kanban-stack h3{font-size:13px;line-height:1.45;margin:9px 0 5px}.kanban-stack p,.kanban-stack small{font-size:10px;color:#7f8b9a}.kanban-stack footer{margin-top:8px}.toolbar{flex-wrap:wrap}.toolbar>.el-segmented:last-child{margin-left:auto}@media(max-width:1000px){.office-kanban{grid-template-columns:repeat(4,240px)}}
+.office-kanban{display:grid;grid-template-columns:repeat(4,minmax(210px,1fr));gap:10px;align-items:start;overflow:auto}.office-kanban>section{background:#f4f6f8;border:1px solid #e1e6eb;min-height:420px;padding:10px}.office-kanban>section>header{display:flex;justify-content:space-between;padding:4px 3px 11px}.office-kanban>section>header span{background:#dfe5ea;min-width:22px;text-align:center;border-radius:3px}.kanban-stack{display:flex;flex-direction:column;gap:8px}.kanban-stack article{background:#fff;border:1px solid #e0e5ea;border-top:3px solid #8693a5;padding:11px}.office-kanban .doing article{border-top-color:#2b77c0}.office-kanban .verify article{border-top-color:#e1a125}.office-kanban .done article{border-top-color:#087c66}.kanban-top,article footer{display:flex;justify-content:space-between;align-items:center}.kanban-top strong{font-size:10px;color:#087c66}.kanban-stack h3{font-size:13px;line-height:1.45;margin:9px 0 5px}.kanban-stack p,.kanban-stack small{font-size:10px;color:#7f8b9a}.kanban-stack footer{margin-top:8px}.toolbar{flex-wrap:wrap}.toolbar>.el-segmented:last-child{margin-left:auto}
+.project-view{display:flex;flex-direction:column;gap:14px}.project-card{background:#fff;border:1px solid #e2e7ed;padding:16px}.project-header{display:flex;align-items:center;gap:12px;margin-bottom:14px}.project-icon{width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold;color:#fff;background:#52606d;flex-shrink:0}.project-icon.meeting{background:#e1a125}.project-icon.project{background:#2b77c0}.project-icon.daily{background:#087c66}.project-title{flex:1}.project-title b{font-size:15px;display:block}.project-title span{font-size:11px;color:#8390a1}.source-section{margin-bottom:12px}.source-label{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px dashed #e3e8ed}.source-label span{font-size:11px;color:#8390a1}.project-task-list{display:flex;flex-direction:column;gap:8px}.project-task-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:#f8fafc;border:1px solid #e8ecf2;border-radius:4px}.project-task-main{flex:1;min-width:0}.project-task-main b{font-size:12px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-task-main span{font-size:10px;color:#8390a1}.project-task-row .status{font-size:10px;padding:2px 6px;border-radius:3px;white-space:nowrap}.project-task-row .status.todo{background:#e8ecf2;color:#52606d}.project-task-row .status.doing{background:#d4e4f6;color:#2b77c0}.project-task-row .status.verify{background:#fcf0d8;color:#c08500}.project-task-row .status.done{background:#d4f0e8;color:#087c66}.compact-actions{display:flex;gap:4px;flex-shrink:0}
+@media(max-width:1000px){.office-kanban{grid-template-columns:repeat(4,240px)}.project-task-row{flex-wrap:wrap}}
 </style>
 
