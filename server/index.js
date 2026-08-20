@@ -5,14 +5,20 @@ import jwt from 'jsonwebtoken'
 import multer from 'multer'
 import fs from 'node:fs'
 import path from 'node:path'
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import mammoth from 'mammoth'
 import * as XLSX from 'xlsx'
 import { PDFDocument } from 'pdf-lib'
 import PDFKit from 'pdfkit'
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
 import PptxGenJS from 'pptxgenjs'
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx'
 import { initDb, readDb, resetDb, writeDb } from './db.js'
 import { generateMeetingMinutesWithAI, generateReportWithAI, splitWithAI } from './ai.js'
+
+const __require = createRequire(import.meta.url)
+const standardFontDataUrl = pathToFileURL(path.join(path.dirname(__require.resolve('pdfjs-dist/legacy/build/pdf.mjs')), '..', '..', 'standard_fonts') + path.sep).href
 
 const app = express()
 const uploadDir = path.resolve('server/uploads')
@@ -37,7 +43,7 @@ app.use((req, res, next) => {
 })
 
 const ok = (res, data, message = '操作成功') => res.json({ code: 0, message, data, requestId: crypto.randomUUID() })
-const fail = (res, status, message) => res.status(status).json({ code: status, message, data: null, requestId: crypto.randomUUID() })
+const fail = (res, status, message, data = null) => res.status(status).json({ code: status, message, data, requestId: crypto.randomUUID() })
 const nextId = (list) => Math.max(0, ...list.map((item) => Number(item.id))) + 1
 const taskKey = (task) => `${Number(task.assigneeId)}::${String(task.title || '').trim().replace(/\s+/g, '').toLowerCase()}`
 
@@ -55,8 +61,51 @@ function desensitize(text = '') {
   return text
     .replace(/(?<!\d)(1\d{2})\d{4}(\d{4})(?!\d)/g, '$1****$2')
     .replace(/(?<!\d)(\d{6})\d{8}(\d{4})(?!\d)/g, '$1********$2')
+    .replace(/(?<!\d)(\d{4})\d{8,11}(\d{4})(?!\d)/g, '$1********$2')
+    .replace(/(?<!\d)(\d{4})[ \-]?\d{4}[ \-]?\d{4}[ \-]?(\d{4})(?!\d)/g, '$1 **** **** $2')
     .replace(/([\w.-])[\w.-]*(@[\w.-]+\.[A-Za-z]{2,})/g, '$1***$2')
     .replace(/(密码|口令|token|密钥)\s*[:：=]\s*\S+/gi, '$1：[已删除]')
+}
+
+function parsePageSpec(spec, total) {
+  const pages = []
+  for (const part of spec.split(/[,，\s]+/)) {
+    if (!part) continue
+    const m = part.match(/^(\d+)(?:[-–~](\d+))?$/)
+    if (!m) continue
+    const start = Number(m[1])
+    const end = m[2] ? Number(m[2]) : start
+    const lo = Math.min(start, end)
+    const hi = Math.max(start, end)
+    for (let p = lo; p <= hi; p++) if (p >= 1 && p <= total) pages.push(p - 1)
+  }
+  return [...new Set(pages)]
+}
+
+async function extractPdfText(filePath) {
+  const buf = fs.readFileSync(filePath)
+  if (!buf.length) return ''
+  const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf), standardFontDataUrl }).promise
+  let text = ''
+  for (let i = 1; i <= doc.numPages; i++) {
+    const content = await (await doc.getPage(i)).getTextContent()
+    text += content.items.map((it) => it.str).join(' ') + '\n'
+  }
+  try { await doc.cleanup() } catch {}
+  return text
+}
+
+const countMasked = (text) => (text.match(/\*+|\[已删除\]/g) || []).length
+
+async function auditPdfSensitive(filePath) {
+  try {
+    const text = await extractPdfText(filePath)
+    const masked = desensitize(text)
+    const count = countMasked(masked)
+    return { count, hasSensitive: count > 0 }
+  } catch {
+    return { count: 0, hasSensitive: false }
+  }
 }
 
 const apiCatalog = [
@@ -92,7 +141,8 @@ const apiCatalog = [
   ['关怀', 'POST', '/api/care/emotion', '提交每日情绪打卡'],
   ['关怀', 'POST', '/api/care/message', '发送师徒问候'],
   ['关怀', 'PUT', '/api/care/config', '保存关怀模块配置'],
-  ['工具', 'POST', '/api/pdf/merge', '合并多个PDF文件'],
+  ['工具', 'POST', '/api/pdf/merge', '合并多个PDF文件（上传时自动脱敏审核）'],
+  ['工具', 'POST', '/api/pdf/extract', '按页码范围提取PDF页面为独立文件（上传时自动脱敏审核）'],
   ['个人', 'GET', '/api/profile', '查询当前用户个人资料'],
   ['个人', 'PUT', '/api/profile/avatar', '修改头像和底色'],
   ['个人', 'PUT', '/api/profile/password', '修改登录密码'],
@@ -464,7 +514,25 @@ app.post('/api/care/action', auth, (req, res) => { const allowed = ['health','fo
 app.put('/api/care/config', auth, (req, res) => { const db = readDb(); db.moduleConfig[req.user.id] = req.body; writeDb(db); ok(res, req.body, '工作台布局已保存') })
 
 app.post('/api/pdf/merge', auth, upload.array('files', 10), async (req, res) => {
-  try { const merged = await PDFDocument.create(); for (const file of req.files) { const doc = await PDFDocument.load(fs.readFileSync(file.path)); const pages = await merged.copyPages(doc, doc.getPageIndices()); pages.forEach((p) => merged.addPage(p)) } const bytes = await merged.save(); res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="merged.pdf"' }).send(Buffer.from(bytes)) }
+  try {
+    if (req.body.confirm !== 'true') {
+      let totalSensitive = 0
+      for (const file of req.files) {
+        totalSensitive += (await auditPdfSensitive(file.path)).count
+      }
+      if (totalSensitive > 0) {
+        return fail(res, 400, `检测到 ${totalSensitive} 处敏感信息，请确认文件已脱敏或无需脱敏后再继续处理`, { sensitiveCount: totalSensitive, requiresConfirm: true })
+      }
+    }
+    const merged = await PDFDocument.create()
+    for (const file of req.files) {
+      const doc = await PDFDocument.load(fs.readFileSync(file.path))
+      const pages = await merged.copyPages(doc, doc.getPageIndices())
+      pages.forEach((p) => merged.addPage(p))
+    }
+    const bytes = await merged.save()
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="merged.pdf"' }).send(Buffer.from(bytes))
+  }
   catch (e) { fail(res, 400, `PDF合并失败：${e.message}`) }
   finally { req.files?.forEach((f) => fs.rm(f.path, { force: true }, () => {})) }
 })
@@ -500,6 +568,30 @@ app.put('/api/profile/password', auth, (req, res) => {
   user.password = newPassword
   writeDb(db)
   ok(res, true, '密码修改成功')
+})
+
+app.post('/api/pdf/extract', auth, upload.single('file'), async (req, res) => {
+  if (!req.file) return fail(res, 400, '请选择PDF文件')
+  const spec = String(req.body.spec || '').trim()
+  if (!spec) return fail(res, 400, '请填写页码范围，例如 1-3,5')
+  try {
+    if (req.body.confirm !== 'true') {
+      const audit = await auditPdfSensitive(req.file.path)
+      if (audit.hasSensitive) {
+        return fail(res, 400, `检测到 ${audit.count} 处敏感信息，请确认文件已脱敏或无需脱敏后再继续处理`, { sensitiveCount: audit.count, requiresConfirm: true })
+      }
+    }
+    const doc = await PDFDocument.load(fs.readFileSync(req.file.path), { ignoreEncryption: true })
+    const total = doc.getPageCount()
+    const pages = parsePageSpec(spec, total)
+    if (!pages.length) return fail(res, 400, '未能解析出有效页码，请使用如 1-3,5,8-9 的格式')
+    const out = await PDFDocument.create()
+    const copied = await out.copyPages(doc, pages)
+    copied.forEach((p) => out.addPage(p))
+    const bytes = await out.save()
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="extracted.pdf"' }).send(Buffer.from(bytes))
+  } catch (e) { fail(res, 400, `PDF页面提取失败：${e.message}`) }
+  finally { req.file && fs.rm(req.file.path, { force: true }, () => {}) }
 })
 
 app.post('/api/admin/reset', auth, (_, res) => ok(res, resetDb(), '测试数据已恢复'))
