@@ -29,7 +29,118 @@
   const save = () => localStorage.setItem('xinhuo_offline_db', JSON.stringify(db))
   const current = () => { try { return JSON.parse(localStorage.getItem('xinhuo_user')) || users[0] } catch { return users[0] } }
   const result = (data, message = '操作成功') => ({ code: 0, message, data, requestId: 'offline-' + Date.now() })
-  function route(method, rawUrl, body) {
+  const decoder = new TextDecoder('utf-8')
+  async function readTextFile(file) {
+    return await file.text()
+  }
+  async function inflateBytes(bytes) {
+    if (typeof DecompressionStream === 'undefined') throw new Error('当前浏览器不支持离线解压该文件类型')
+    const ds = new DecompressionStream('deflate-raw')
+    const stream = new Blob([bytes]).stream().pipeThrough(ds)
+    return new Uint8Array(await new Response(stream).arrayBuffer())
+  }
+  async function unzipEntries(file) {
+    const data = new Uint8Array(await file.arrayBuffer())
+    const view = new DataView(data.buffer)
+    const entries = new Map()
+    let offset = 0
+    while (offset + 30 <= data.length) {
+      if (view.getUint32(offset, true) !== 0x04034b50) break
+      const compression = view.getUint16(offset + 8, true)
+      const compressedSize = view.getUint32(offset + 18, true)
+      const fileNameLength = view.getUint16(offset + 26, true)
+      const extraLength = view.getUint16(offset + 28, true)
+      const fileName = decoder.decode(data.slice(offset + 30, offset + 30 + fileNameLength))
+      const dataStart = offset + 30 + fileNameLength + extraLength
+      const dataEnd = dataStart + compressedSize
+      const chunk = data.slice(dataStart, dataEnd)
+      let content = null
+      if (compression === 0) content = chunk
+      else if (compression === 8) content = await inflateBytes(chunk)
+      if (content) entries.set(fileName, decoder.decode(content))
+      offset = dataEnd
+    }
+    return entries
+  }
+  function xmlPlainText(xml) {
+    return String(xml || '')
+      .replace(/<w:tab\/>/g, '\t')
+      .replace(/<\/w:p>/g, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&#10;/g, '\n')
+      .replace(/\r/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  }
+  function columnLetters(index) {
+    let value = ''
+    let current = index + 1
+    while (current > 0) {
+      const mod = (current - 1) % 26
+      value = String.fromCharCode(65 + mod) + value
+      current = Math.floor((current - 1) / 26)
+    }
+    return value
+  }
+  function parseSheetRows(sheetXml, sharedStrings) {
+    const rows = [...sheetXml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)]
+    return rows.map(([, rowXml]) => {
+      const cells = [...rowXml.matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/g)]
+      const values = []
+      cells.forEach(([, attrs, cellXml], cellIndex) => {
+        const ref = /r="([A-Z]+)\d+"/.exec(attrs)?.[1]
+        const expectedIndex = ref ? ref.split('').reduce((sum, ch) => sum * 26 + ch.charCodeAt(0) - 64, 0) - 1 : cellIndex
+        while (values.length < expectedIndex) values.push('')
+        const type = /t="([^"]+)"/.exec(attrs)?.[1]
+        let value = /<v[^>]*>([\s\S]*?)<\/v>/.exec(cellXml)?.[1] || /<t[^>]*>([\s\S]*?)<\/t>/.exec(cellXml)?.[1] || ''
+        if (type === 's') value = sharedStrings[Number(value)] || ''
+        value = value.replace(/<[^>]+>/g, '').trim()
+        values.push(value)
+      })
+      return values
+    }).filter((row) => row.some(Boolean))
+  }
+  async function parseDocxFile(file) {
+    const entries = await unzipEntries(file)
+    const documentXml = entries.get('word/document.xml')
+    if (!documentXml) throw new Error('未找到 Word 正文内容')
+    return xmlPlainText(documentXml)
+  }
+  async function parseXlsxFile(file) {
+    const entries = await unzipEntries(file)
+    const workbookXml = entries.get('xl/workbook.xml')
+    if (!workbookXml) throw new Error('未找到工作簿内容')
+    const relsXml = entries.get('xl/_rels/workbook.xml.rels') || ''
+    const sharedStringsXml = entries.get('xl/sharedStrings.xml') || ''
+    const sharedStrings = [...sharedStringsXml.matchAll(/<si\b[\s\S]*?<\/si>/g)].map((match) => xmlPlainText(match[0]))
+    const relMap = Object.fromEntries([...relsXml.matchAll(/<Relationship[^>]+Id="([^"]+)"[^>]+Target="([^"]+)"/g)].map(([, id, target]) => [id, target]))
+    const sheetDefs = [...workbookXml.matchAll(/<sheet[^>]+name="([^"]+)"[^>]+r:id="([^"]+)"/g)].map(([, name, relId]) => ({ name, target: relMap[relId] }))
+    const output = []
+    sheetDefs.forEach(({ name, target }) => {
+      const normalized = target ? `xl/${target.replace(/^\.\//, '').replace(/^\/+/, '')}` : ''
+      const sheetXml = entries.get(normalized)
+      if (!sheetXml) return
+      const rows = parseSheetRows(sheetXml, sharedStrings)
+      output.push(`【${name}】`)
+      rows.forEach((row) => output.push(row.map((cell, index) => `${columnLetters(index)}:${cell}`).join(' | ')))
+    })
+    return output.join('\n').trim()
+  }
+  async function extractOfflineFile(file) {
+    const name = String(file?.name || '')
+    const ext = name.slice(name.lastIndexOf('.')).toLowerCase()
+    if (['.txt', '.csv', '.md', '.json'].includes(ext)) return { fileName: name, content: await readTextFile(file) }
+    if (ext === '.docx') return { fileName: name, content: await parseDocxFile(file) }
+    if (ext === '.xlsx') return { fileName: name, content: await parseXlsxFile(file) }
+    if (['.doc', '.xls', '.pdf', '.png', '.jpg', '.jpeg', '.bmp', '.mp3', '.wav', '.m4a', '.aac'].includes(ext)) {
+      return { fileName: name, content: `当前离线版暂不支持直接解析 ${ext} 文件，请在在线版中处理，或先转换为 TXT、DOCX、XLSX、CSV 后再导入。` }
+    }
+    return { fileName: name || '未命名文件', content: '无法识别该文件格式，请改用 TXT、DOCX、XLSX 或 CSV。' }
+  }
+  async function route(method, rawUrl, body) {
     const url = String(rawUrl).replace(/^.*\/api/, '/api').split('?')[0]
     if (url === '/api/health') return result({ status: 'ok', aiConfigured: true, offline: true })
     if (url === '/api/auth/login') { const user = users.find(u => [u.username, u.name, u.employeeNo].includes(body.username) && u.role === body.role); return user ? result({ token: 'offline-token', user }, '登录成功') : { status: 401, body: { code: 401, message: '账号或角色不匹配' } } }
@@ -43,7 +154,7 @@
     match = url.match(/^\/api\/tasks\/(\d+)\/verify$/); if (match) { const t = db.tasks.find(x => x.id === Number(match[1])); t.status = body.approved ? 'done' : 'doing'; t.progress = body.approved ? 100 : 90; t.mentorComment = body.comment; save(); return result(t) }
     match = url.match(/^\/api\/tasks\/(\d+)\/like$/); if (match) { const t=db.tasks.find(x=>x.id===Number(match[1]));if(db.likes.some(x=>x.taskId===t.id))return{status:409,body:{code:409,message:'该任务已经点赞'}};const like={id:Date.now(),taskId:t.id,taskTitle:t.title,fromId:3,from:'李四',toId:t.assigneeId,comment:body.comment,points:body.points||10,date:today};db.likes.push(like);save();return result(like) }
     if (url === '/api/desensitize') return result({ text: String(body.text || '').replace(/1\d{10}/g, '138****0000') })
-    if (url === '/api/file/upload') return result({ fileName: '离线示例材料.txt', content: '离线展示模式已读取示例材料。请复核脱敏后进行任务拆解。' })
+    if (url === '/api/file/upload') return result(await extractOfflineFile(body.file))
     if (url === '/api/task/split') { const raw=String(body.text||''),sourceType=/会议|例会|纪要/.test(raw)?'meeting':/项目|专项|验收/.test(raw)?'project':'daily';const rows = raw.split(/[。；;\n]/).filter(x => x.trim()).slice(0, 6);const items=rows.length?[...rows]:['整理材料并确认行动项'];['确认范围与完成标准','执行任务并记录过程','复核成果并归档'].forEach(x=>{if(items.length<3)items.push(x)}); return result({ sourceType,sourceConfidence:88,sourceReason:'根据材料中的业务关键词自动识别',tasks: items.map((x, i) => ({ title: x.trim(), description: '根据源材料生成的离线演示任务', priority: i ? 'P2' : 'P1', dueDate: today, standard: '按时完成并提交可核验成果', method: (body.methods || ['WBS']).join(' + '),points:i?50:80 })), warning: '离线展示版使用本地规则模拟AI结果' }) }
     if (url === '/api/work-logs' && method === 'GET') return result(db.logs.filter(x => x.userId === current().id || current().role === 'mentor'))
     if (url === '/api/work-logs' && method === 'POST') { db.logs.push({ id: Date.now(), userId: current().id, ...body }); save(); return result(body) }
@@ -69,7 +180,7 @@
     setRequestHeader(k, v) { this.headers[k] = v }
     getAllResponseHeaders() { return 'content-type: application/json\r\n' }
     addEventListener(name, fn) { this['on' + name] = fn }
-    send(raw) { setTimeout(() => { let body = {}; try { body = typeof raw === 'string' ? JSON.parse(raw) : raw instanceof FormData ? Object.fromEntries(raw.entries()) : raw || {} } catch {} const out = route(this.method, this.url, body); this.status = out.status || 200; this.readyState = 4; if (out.blob) { this.response = out.blob; this.responseText = '' } else { const payload = out.body || out; this.responseText = JSON.stringify(payload); this.response = this.responseType && this.responseType !== 'text' ? new Blob([this.responseText]) : this.responseText } if (this.onreadystatechange) this.onreadystatechange(); if (this.onload) this.onload(); if (this.onloadend) this.onloadend() }, 40) }
+    send(raw) { setTimeout(async () => { let body = {}; try { body = typeof raw === 'string' ? JSON.parse(raw) : raw instanceof FormData ? Object.fromEntries(raw.entries()) : raw || {} } catch {} const out = await route(this.method, this.url, body); this.status = out.status || 200; this.readyState = 4; if (out.blob) { this.response = out.blob; this.responseText = '' } else { const payload = out.body || out; this.responseText = JSON.stringify(payload); this.response = this.responseType && this.responseType !== 'text' ? new Blob([this.responseText]) : this.responseText } if (this.onreadystatechange) this.onreadystatechange(); if (this.onload) this.onload(); if (this.onloadend) this.onloadend() }, 40) }
     abort() {}
   }
   window.XMLHttpRequest = OfflineXHR

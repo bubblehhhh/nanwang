@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled, MagicStick, Check, Document, EditPen, Filter } from '@element-plus/icons-vue'
@@ -347,9 +347,9 @@ async function confirmPublish() {
 
 <style scoped>
 .step-bar{display:flex;gap:0;margin-bottom:14px;background:#fff;border:1px solid #e2e7ed;padding:0;border-radius:4px;overflow:hidden}
-.step{flex:1;display:flex;align-items:center;gap:6px;padding:10px 12px;font-size:14px;color:#8390a1;border-right:1px solid #e2e7ed;position:relative}
+.step{flex:1;display:flex;align-items:center;gap:6px;padding:10px 12px;font-size:11px;color:#8390a1;border-right:1px solid #e2e7ed;position:relative}
 .step:last-child{border-right:none}
-.step span{width:20px;height:20px;border-radius:50%;background:#dfe5ea;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;flex-shrink:0}
+.step span{width:20px;height:20px;border-radius:50%;background:#dfe5ea;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;flex-shrink:0}
 .step.active{color:#087c66;background:#eaf6f2}
 .step.active span{background:#087c66}
 .step.done span{background:#087c66}
@@ -360,24 +360,24 @@ async function confirmPublish() {
 .sx-result>header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
 .sx-result>header>div:last-child{display:flex;gap:8px}
 .smartx h2{font-size:15px;margin:0 0 4px}
-.smartx header p{font-size:14px;color:#8390a1;margin:0}
+.smartx header p{font-size:11px;color:#8390a1;margin:0}
 .sx-input :deep(.el-upload-dragger){padding:17px}
 .sx-input :deep(.el-upload-dragger svg){width:26px;color:#087c66}
 .file-meta-card{border:1px solid;border-radius:4px;padding:10px;margin:8px 0}
 .file-meta-top{display:flex;align-items:center;justify-content:space-between}
-.file-type-badge{color:#fff;padding:2px 8px;border-radius:3px;font-size:14px;font-weight:bold}
-.file-status{display:flex;align-items:center;gap:4px;font-size:14px}
+.file-type-badge{color:#fff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:bold}
+.file-status{display:flex;align-items:center;gap:4px;font-size:11px}
 .file-status.ok{color:#087c66}
 .file-status.warn{color:#e1a125}
-.file-name{display:flex;align-items:center;gap:5px;font-size:14px;color:#087c66;margin:8px 0}
+.file-name{display:flex;align-items:center;gap:5px;font-size:11px;color:#087c66;margin:8px 0}
 .file-name svg{width:14px}
-.confirm-row{display:flex;justify-content:space-between;align-items:center;padding:9px;background:#fff7e8;margin:8px 0 18px;font-size:14px;flex-wrap:wrap;gap:6px}
+.confirm-row{display:flex;justify-content:space-between;align-items:center;padding:9px;background:#fff7e8;margin:8px 0 18px;font-size:11px;flex-wrap:wrap;gap:6px}
 .confirm-row.ok{background:#eaf6f2;color:#087c66}
 .confirm-actions{display:flex;gap:6px}
 .method-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .method-grid :deep(.el-checkbox){height:auto;margin:0;padding:8px;border:1px solid #e5e9ee}
 .method-grid b,.method-grid small{display:block}
-.method-grid small{font-size:12px;color:#8490a0}
+.method-grid small{font-size:9px;color:#8490a0}
 .split-btn{width:100%;margin-top:12px}
 .minutes-export-bar{display:flex;align-items:center;justify-content:space-between;background:#f0f7f4;border:1px solid #c9e0d6;padding:10px 14px;margin:8px 0 18px;border-radius:4px}
 .minutes-export-label{font-size:13px;font-weight:bold;color:#087c66;display:flex;align-items:center;gap:6px}
@@ -398,18 +398,18 @@ async function confirmPublish() {
 .mind-branches article{position:relative;margin:10px 0}
 .mind-branches i{position:absolute;width:28px;border-top:2px solid #9bcfc1;left:-28px;top:50%}
 .mind-branches div{border:1px solid #dce6e3;padding:9px 12px;border-left:4px solid #087c66}
-.mind-branches span,.mind-branches small{display:block;font-size:13px;color:#788596;margin-top:4px}
+.mind-branches span,.mind-branches small{display:block;font-size:10px;color:#788596;margin-top:4px}
 .publish-bar{display:flex;justify-content:space-between;align-items:center;padding:12px;background:#f8fafc;border:1px solid #e2e7ed;margin-top:12px}
-.publish-summary{display:flex;gap:14px;font-size:15px;color:#52606d}
+.publish-summary{display:flex;gap:14px;font-size:12px;color:#52606d}
 .publish-summary b{color:#087c66;font-size:14px}
 .desensitize-compare{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.desensitize-col h4{font-size:16px;margin:0 0 6px}
-.desensitized-preview{background:#f8fafc;border:1px solid #e2e7ed;padding:10px;border-radius:4px;font-size:15px;line-height:1.6;min-height:200px;max-height:300px;overflow:auto}
+.desensitize-col h4{font-size:13px;margin:0 0 6px}
+.desensitized-preview{background:#f8fafc;border:1px solid #e2e7ed;padding:10px;border-radius:4px;font-size:12px;line-height:1.6;min-height:200px;max-height:300px;overflow:auto}
 .publish-task-list{display:flex;flex-direction:column;gap:10px;max-height:400px;overflow:auto}
 .publish-task-item{display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid #e3e8ed;border-radius:4px}
 .publish-task-main{flex:1;min-width:0}
 .publish-task-main .el-input{margin-bottom:6px}
-.publish-task-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:14px;color:#8390a1}
+.publish-task-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:#8390a1}
 @media(max-width:1000px){.smartx-grid{grid-template-columns:1fr}.task-cards{grid-template-columns:1fr}.step-bar{flex-wrap:wrap}.step{flex:1 0 33%}.desensitize-compare{grid-template-columns:1fr}}
 @media(max-width:600px){.method-grid{grid-template-columns:1fr}.sx-result>header{display:block}.sx-result>header>div:last-child{margin-top:9px;flex-wrap:wrap}.mind-map{grid-template-columns:1fr}.mind-branches{margin-top:20px}}
 </style>

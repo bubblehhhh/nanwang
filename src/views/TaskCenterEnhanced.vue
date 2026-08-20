@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed,onMounted,reactive,ref } from 'vue'
 import { ElMessage,ElMessageBox } from 'element-plus'
 import { Plus,Search,EditPen,CircleCheck,Star } from '@element-plus/icons-vue'
@@ -11,7 +11,7 @@ const statuses={todo:'待开始',doing:'进行中',verify:'待核销',done:'已�
 const groupMeta={meeting:{title:'会议任务',desc:'由会议纪要、会议录音或会议行动项生成',icon:'会'},project:{title:'项目工作',desc:'专项、建设、改造和阶段性项目任务',icon:'项'},daily:{title:'日常工作',desc:'巡检、学习、培训和常规管理事项',icon:'常'}}
 const filtered=computed(()=>tasks.value.filter(t=>(filter.value==='all'||t.status===filter.value)&&(!keyword.value||`${t.title}${t.assignee}${t.projectName}`.includes(keyword.value))))
 const scopedTasks=computed(()=>filtered.value.filter(t=>auth.user?.role!=='mentor'||apprenticeFilter.value==='all'||t.assigneeId===Number(apprenticeFilter.value)))
-const workGroups=computed(()=>['meeting','project','daily'].map(category=>{const list=scopedTasks.value.filter(t=>(/会议/.test(`${t.source}${t.projectName}`)?'meeting':t.workCategory)===category);return{category,...groupMeta[category],tasks:list,priorities:['P1','P2'].map(priority=>({priority,tasks:list.filter(t=>t.priority===priority)})).filter(g=>g.tasks.length)}}).filter(g=>g.tasks.length))
+const workGroups=computed(()=>['meeting','project','daily'].map(category=>{const list=scopedTasks.value.filter(t=>(/会议/.test(`${t.source}${t.projectName}`)?'meeting':t.workCategory)===category);return{category,...groupMeta[category],tasks:list,priorities:['P0','P1','P2','P3'].map(priority=>({priority,tasks:list.filter(t=>t.priority===priority)})).filter(g=>g.tasks.length)}}).filter(g=>g.tasks.length))
 const apprenticeStats=computed(()=>users.value.map(user=>{const list=tasks.value.filter(t=>t.assigneeId===user.id);return{...user,total:list.length,verify:list.filter(t=>t.status==='verify').length,progress:list.length?Math.round(list.reduce((s,t)=>s+t.progress,0)/list.length):0}}))
 const kanban=computed(()=>Object.entries(statuses).map(([status,title])=>({status,title,tasks:scopedTasks.value.filter(t=>t.status===status)})))
 const projectGroups=computed(()=>{
@@ -78,7 +78,7 @@ onMounted(load)
 <el-segmented v-model="viewMode" :options="[{label:'分组列表',value:'groups'},{label:'项目视图',value:'projects'},{label:'状态看板',value:'board'}]"/>
 </div>
 <div v-if="viewMode==='board'" class="office-kanban">
-<section v-for="column in kanban" :key="column.status" :class="column.status"><header><b>{{column.title}}</b><span>{{column.tasks.length}}</span></header><div class="kanban-stack"><article v-for="task in column.tasks" :key="task.id"><div class="kanban-top"><el-tag size="small" :type="task.priority==='P1'?'warning':'primary'">{{task.priority}}</el-tag><strong>+{{task.points||50}} 积分</strong></div><h3>{{task.title}}</h3><p>{{task.projectName}} · {{task.assignee}}</p><el-progress :percentage="task.progress" :stroke-width="6"/><footer><small>截止 {{task.dueDate}}</small><div><el-button v-if="auth.user?.role==='mentor'&&task.status==='verify'" text type="success" @click="verify(task,true)">核销</el-button><el-button v-if="auth.user?.role==='mentor'&&task.status==='done'" text :type="liked(task)?'success':'primary'" :icon="Star" :disabled="liked(task)" @click="like(task)">{{liked(task)?'已点赞':'点赞'}}</el-button><el-button v-else-if="auth.user?.role==='apprentice'&&task.status!=='verify'&&task.status!=='done'" text @click="openTask(task)">更新</el-button></div></footer></article></div></section>
+<section v-for="column in kanban" :key="column.status" :class="column.status"><header><b>{{column.title}}</b><span>{{column.tasks.length}}</span></header><div class="kanban-stack"><article v-for="task in column.tasks" :key="task.id"><div class="kanban-top"><el-tag size="small" :type="task.priority==='P0'?'danger':task.priority==='P1'?'warning':'primary'">{{task.priority}}</el-tag><strong>+{{task.points||50}} 积分</strong></div><h3>{{task.title}}</h3><p>{{task.projectName}} · {{task.assignee}}</p><el-progress :percentage="task.progress" :stroke-width="6"/><footer><small>截止 {{task.dueDate}}</small><div><el-button v-if="auth.user?.role==='mentor'&&task.status==='verify'" text type="success" @click="verify(task,true)">核销</el-button><el-button v-if="auth.user?.role==='mentor'&&task.status==='done'" text :type="liked(task)?'success':'primary'" :icon="Star" :disabled="liked(task)" @click="like(task)">{{liked(task)?'已点赞':'点赞'}}</el-button><el-button v-else-if="auth.user?.role==='apprentice'&&task.status!=='verify'&&task.status!=='done'" text @click="openTask(task)">更新</el-button></div></footer></article></div></section>
 </div>
 <div v-else-if="viewMode==='projects'" class="project-view">
 <div v-for="pg in projectGroups" :key="pg.projectName" class="project-card">
@@ -133,8 +133,8 @@ onMounted(load)
 <el-collapse-item v-for="group in work.priorities" :key="`${work.category}-${group.priority}`" :name="`${work.category}-${group.priority}`">
 <template #title>
 <div class="priority-head">
-<el-tag :type="group.priority==='P1'?'warning':'primary'" effect="dark">{{group.priority}}</el-tag>
-<b>{{group.priority==='P1'?'重要优先':'常规执行'}}</b>
+<el-tag :type="group.priority==='P0'?'danger':group.priority==='P1'?'warning':'primary'" effect="dark">{{group.priority}}</el-tag>
+<b>{{group.priority==='P0'?'紧急关键':group.priority==='P1'?'重要优先':group.priority==='P2'?'常规执行':'低优先'}}</b>
 <span>{{group.tasks.length}} 项</span>
 <em v-if="group.tasks.some(t=>t.status==='verify')">{{group.tasks.filter(t=>t.status==='verify').length}} 项待核销</em>
 </div>
@@ -188,7 +188,7 @@ onMounted(load)
 </el-form-item>
 <el-form-item label="优先级">
 <el-select v-model="form.priority">
-<el-option v-for="p in ['P1','P2']" :key="p" :value="p"/>
+<el-option v-for="p in ['P0','P1','P2','P3']" :key="p" :value="p"/>
 </el-select>
 </el-form-item>
 <el-form-item label="负责人">
@@ -212,7 +212,7 @@ onMounted(load)
 </el-form-item>
 </div>
 <el-form-item label="关联岗位技能（必选）"><el-select v-model="form.skillIds" multiple style="width:100%"><el-option v-for="skill in skills" :key="skill.id" :label="`${skill.domain} · ${skill.name}`" :value="skill.id"/></el-select></el-form-item>
-<el-form-item label="安全风险点（P1必填，以分号或换行分隔）"><el-input v-model="form.riskText" type="textarea" :rows="2" placeholder="例如：设备带电区域保持安全距离；异常情况立即停止并报告"/></el-form-item>
+<el-form-item label="安全风险点（P0/P1必填，以分号或换行分隔）"><el-input v-model="form.riskText" type="textarea" :rows="2" placeholder="例如：设备带电区域保持安全距离；异常情况立即停止并报告"/></el-form-item>
 <el-form-item label="能力证据要求（以分号或换行分隔）"><el-input v-model="form.evidenceText" placeholder="例如：风险预控卡；现场照片；工作记录"/></el-form-item>
 <el-form-item label="完成标准">
 <el-input v-model="form.standard"/>
@@ -241,8 +241,8 @@ onMounted(load)
 </div>
 </template>
 <style scoped>
-.office-kanban{display:grid;grid-template-columns:repeat(4,minmax(210px,1fr));gap:10px;align-items:start;overflow:auto}.office-kanban>section{background:#f4f6f8;border:1px solid #e1e6eb;min-height:420px;padding:10px}.office-kanban>section>header{display:flex;justify-content:space-between;padding:4px 3px 11px}.office-kanban>section>header span{background:#dfe5ea;min-width:22px;text-align:center;border-radius:3px}.kanban-stack{display:flex;flex-direction:column;gap:8px}.kanban-stack article{background:#fff;border:1px solid #e0e5ea;border-top:3px solid #8693a5;padding:11px}.office-kanban .doing article{border-top-color:#2b77c0}.office-kanban .verify article{border-top-color:#e1a125}.office-kanban .done article{border-top-color:#087c66}.kanban-top,article footer{display:flex;justify-content:space-between;align-items:center}.kanban-top strong{font-size:13px;color:#087c66}.kanban-stack h3{font-size:16px;line-height:1.45;margin:9px 0 5px}.kanban-stack p,.kanban-stack small{font-size:13px;color:#7f8b9a}.kanban-stack footer{margin-top:8px}.toolbar{flex-wrap:wrap}.toolbar>.el-segmented:last-child{margin-left:auto}
-.project-view{display:flex;flex-direction:column;gap:14px}.project-card{background:#fff;border:1px solid #e2e7ed;padding:16px}.project-header{display:flex;align-items:center;gap:12px;margin-bottom:14px}.project-icon{width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold;color:#fff;background:#52606d;flex-shrink:0}.project-icon.meeting{background:#e1a125}.project-icon.project{background:#2b77c0}.project-icon.daily{background:#087c66}.project-title{flex:1}.project-title b{font-size:15px;display:block}.project-title span{font-size:14px;color:#8390a1}.source-section{margin-bottom:12px}.source-label{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px dashed #e3e8ed}.source-label span{font-size:14px;color:#8390a1}.project-task-list{display:flex;flex-direction:column;gap:8px}.project-task-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:#f8fafc;border:1px solid #e8ecf2;border-radius:4px}.project-task-main{flex:1;min-width:0}.project-task-main b{font-size:15px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-task-main span{font-size:13px;color:#8390a1}.project-task-row .status{font-size:13px;padding:2px 6px;border-radius:3px;white-space:nowrap}.project-task-row .status.todo{background:#e8ecf2;color:#52606d}.project-task-row .status.doing{background:#d4e4f6;color:#2b77c0}.project-task-row .status.verify{background:#fcf0d8;color:#c08500}.project-task-row .status.done{background:#d4f0e8;color:#087c66}.compact-actions{display:flex;gap:4px;flex-shrink:0}
+.office-kanban{display:grid;grid-template-columns:repeat(4,minmax(210px,1fr));gap:10px;align-items:start;overflow:auto}.office-kanban>section{background:#f4f6f8;border:1px solid #e1e6eb;min-height:420px;padding:10px}.office-kanban>section>header{display:flex;justify-content:space-between;padding:4px 3px 11px}.office-kanban>section>header span{background:#dfe5ea;min-width:22px;text-align:center;border-radius:3px}.kanban-stack{display:flex;flex-direction:column;gap:8px}.kanban-stack article{background:#fff;border:1px solid #e0e5ea;border-top:3px solid #8693a5;padding:11px}.office-kanban .doing article{border-top-color:#2b77c0}.office-kanban .verify article{border-top-color:#e1a125}.office-kanban .done article{border-top-color:#087c66}.kanban-top,article footer{display:flex;justify-content:space-between;align-items:center}.kanban-top strong{font-size:10px;color:#087c66}.kanban-stack h3{font-size:13px;line-height:1.45;margin:9px 0 5px}.kanban-stack p,.kanban-stack small{font-size:10px;color:#7f8b9a}.kanban-stack footer{margin-top:8px}.toolbar{flex-wrap:wrap}.toolbar>.el-segmented:last-child{margin-left:auto}
+.project-view{display:flex;flex-direction:column;gap:14px}.project-card{background:#fff;border:1px solid #e2e7ed;padding:16px}.project-header{display:flex;align-items:center;gap:12px;margin-bottom:14px}.project-icon{width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold;color:#fff;background:#52606d;flex-shrink:0}.project-icon.meeting{background:#e1a125}.project-icon.project{background:#2b77c0}.project-icon.daily{background:#087c66}.project-title{flex:1}.project-title b{font-size:15px;display:block}.project-title span{font-size:11px;color:#8390a1}.source-section{margin-bottom:12px}.source-label{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px dashed #e3e8ed}.source-label span{font-size:11px;color:#8390a1}.project-task-list{display:flex;flex-direction:column;gap:8px}.project-task-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:#f8fafc;border:1px solid #e8ecf2;border-radius:4px}.project-task-main{flex:1;min-width:0}.project-task-main b{font-size:12px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-task-main span{font-size:10px;color:#8390a1}.project-task-row .status{font-size:10px;padding:2px 6px;border-radius:3px;white-space:nowrap}.project-task-row .status.todo{background:#e8ecf2;color:#52606d}.project-task-row .status.doing{background:#d4e4f6;color:#2b77c0}.project-task-row .status.verify{background:#fcf0d8;color:#c08500}.project-task-row .status.done{background:#d4f0e8;color:#087c66}.compact-actions{display:flex;gap:4px;flex-shrink:0}
 @media(max-width:1000px){.office-kanban{grid-template-columns:repeat(4,240px)}.project-task-row{flex-wrap:wrap}}
 </style>
 
