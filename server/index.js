@@ -93,6 +93,8 @@ const apiCatalog = [
   ['关怀', 'POST', '/api/care/message', '发送师徒问候'],
   ['关怀', 'PUT', '/api/care/config', '保存关怀模块配置'],
   ['工具', 'POST', '/api/pdf/merge', '合并多个PDF文件'],
+  ['工具', 'POST', '/api/pdf/info', '获取PDF页数等基本信息'],
+  ['工具', 'POST', '/api/pdf/split', '按页码范围拆分PDF文件'],
   ['个人', 'GET', '/api/profile', '查询当前用户个人资料'],
   ['个人', 'PUT', '/api/profile/avatar', '修改头像和底色'],
   ['个人', 'PUT', '/api/profile/password', '修改登录密码'],
@@ -467,6 +469,46 @@ app.post('/api/pdf/merge', auth, upload.array('files', 10), async (req, res) => 
   try { const merged = await PDFDocument.create(); for (const file of req.files) { const doc = await PDFDocument.load(fs.readFileSync(file.path)); const pages = await merged.copyPages(doc, doc.getPageIndices()); pages.forEach((p) => merged.addPage(p)) } const bytes = await merged.save(); res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="merged.pdf"' }).send(Buffer.from(bytes)) }
   catch (e) { fail(res, 400, `PDF合并失败：${e.message}`) }
   finally { req.files?.forEach((f) => fs.rm(f.path, { force: true }, () => {})) }
+})
+
+app.post('/api/pdf/info', auth, upload.single('file'), async (req, res) => {
+  if (!req.file) return fail(res, 400, '请选择PDF文件')
+  try {
+    const doc = await PDFDocument.load(fs.readFileSync(req.file.path))
+    ok(res, { pages: doc.getPageCount(), fileName: req.file.originalname, fileSize: req.file.size })
+  } catch (e) { fail(res, 400, `PDF读取失败：${e.message}`) }
+  finally { req.file && fs.rm(req.file.path, { force: true }, () => {}) }
+})
+
+function parsePageRanges(input, maxPages) {
+  const result = []
+  for (const part of input.split(',').map((s) => s.trim()).filter(Boolean)) {
+    const m = part.match(/^(\d+)(?:-(\d+))?$/)
+    if (!m) throw new Error(`页码格式错误："${part}"，请使用如 1-3,5,7-10 的格式`)
+    const start = parseInt(m[1])
+    const end = m[2] ? parseInt(m[2]) : start
+    if (start < 1 || end < 1 || start > maxPages || end > maxPages) throw new Error(`页码超出范围（共${maxPages}页）："${part}"`)
+    if (start > end) throw new Error(`页码范围起始大于结束："${part}"`)
+    for (let i = start; i <= end; i++) result.push(i - 1)
+  }
+  return [...new Set(result)].sort((a, b) => a - b)
+}
+
+app.post('/api/pdf/split', auth, upload.single('file'), async (req, res) => {
+  if (!req.file) return fail(res, 400, '请选择PDF文件')
+  try {
+    const src = await PDFDocument.load(fs.readFileSync(req.file.path))
+    const total = src.getPageCount()
+    const indices = parsePageRanges(String(req.body.ranges || ''), total)
+    if (!indices.length) return fail(res, 400, '请填写有效的页码范围')
+    const out = await PDFDocument.create()
+    const pages = await out.copyPages(src, indices)
+    pages.forEach((p) => out.addPage(p))
+    const bytes = await out.save()
+    const fullName = `${req.file.originalname.replace(/\.pdf$/i, '') || 'document'}_拆分.pdf`
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="split.pdf"; filename*=UTF-8''${encodeURIComponent(fullName)}` }).send(Buffer.from(bytes))
+  } catch (e) { fail(res, 400, e.message) }
+  finally { req.file && fs.rm(req.file.path, { force: true }, () => {}) }
 })
 
 app.get('/api/profile', auth, (req, res) => {
