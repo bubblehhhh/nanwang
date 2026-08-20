@@ -55,8 +55,25 @@ function desensitize(text = '') {
   return text
     .replace(/(?<!\d)(1\d{2})\d{4}(\d{4})(?!\d)/g, '$1****$2')
     .replace(/(?<!\d)(\d{6})\d{8}(\d{4})(?!\d)/g, '$1********$2')
+    .replace(/(?<!\d)(\d{4})\d{8,11}(\d{4})(?!\d)/g, '$1********$2')
+    .replace(/(?<!\d)(\d{4})[ \-]?\d{4}[ \-]?\d{4}[ \-]?(\d{4})(?!\d)/g, '$1 **** **** $2')
     .replace(/([\w.-])[\w.-]*(@[\w.-]+\.[A-Za-z]{2,})/g, '$1***$2')
     .replace(/(密码|口令|token|密钥)\s*[:：=]\s*\S+/gi, '$1：[已删除]')
+}
+
+function parsePageSpec(spec, total) {
+  const pages = []
+  for (const part of spec.split(/[,，\s]+/)) {
+    if (!part) continue
+    const m = part.match(/^(\d+)(?:[-–~](\d+))?$/)
+    if (!m) continue
+    const start = Number(m[1])
+    const end = m[2] ? Number(m[2]) : start
+    const lo = Math.min(start, end)
+    const hi = Math.max(start, end)
+    for (let p = lo; p <= hi; p++) if (p >= 1 && p <= total) pages.push(p - 1)
+  }
+  return [...new Set(pages)]
 }
 
 const apiCatalog = [
@@ -90,6 +107,7 @@ const apiCatalog = [
   ['关怀', 'POST', '/api/care/message', '发送师徒问候'],
   ['关怀', 'PUT', '/api/care/config', '保存关怀模块配置'],
   ['工具', 'POST', '/api/pdf/merge', '合并多个PDF文件'],
+  ['工具', 'POST', '/api/pdf/extract', '按页码范围提取PDF页面为独立文件'],
   ['管理', 'POST', '/api/admin/reset', '恢复初始演示数据']
 ]
 
@@ -412,6 +430,24 @@ app.post('/api/pdf/merge', auth, upload.array('files', 10), async (req, res) => 
   try { const merged = await PDFDocument.create(); for (const file of req.files) { const doc = await PDFDocument.load(fs.readFileSync(file.path)); const pages = await merged.copyPages(doc, doc.getPageIndices()); pages.forEach((p) => merged.addPage(p)) } const bytes = await merged.save(); res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="merged.pdf"' }).send(Buffer.from(bytes)) }
   catch (e) { fail(res, 400, `PDF合并失败：${e.message}`) }
   finally { req.files?.forEach((f) => fs.rm(f.path, { force: true }, () => {})) }
+})
+
+app.post('/api/pdf/extract', auth, upload.single('file'), async (req, res) => {
+  if (!req.file) return fail(res, 400, '请选择PDF文件')
+  const spec = String(req.body.spec || '').trim()
+  if (!spec) return fail(res, 400, '请填写页码范围，例如 1-3,5')
+  try {
+    const doc = await PDFDocument.load(fs.readFileSync(req.file.path), { ignoreEncryption: true })
+    const total = doc.getPageCount()
+    const pages = parsePageSpec(spec, total)
+    if (!pages.length) return fail(res, 400, '未能解析出有效页码，请使用如 1-3,5,8-9 的格式')
+    const out = await PDFDocument.create()
+    const copied = await out.copyPages(doc, pages)
+    copied.forEach((p) => out.addPage(p))
+    const bytes = await out.save()
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="extracted.pdf"' }).send(Buffer.from(bytes))
+  } catch (e) { fail(res, 400, `PDF页面提取失败：${e.message}`) }
+  finally { req.file && fs.rm(req.file.path, { force: true }, () => {}) }
 })
 
 app.post('/api/admin/reset', auth, (_, res) => ok(res, resetDb(), '测试数据已恢复'))
