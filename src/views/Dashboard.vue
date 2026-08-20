@@ -7,7 +7,7 @@ import { useAuthStore } from '../store'
 
 const auth=useAuthStore();const router=useRouter();const data=ref({tasks:[],stats:{},users:[],milestones:[]});const loading=ref(true)
 const firstName=computed(()=>auth.user?.name||'')
-const statusText={todo:'待开始',doing:'进行中',verify:'待核销',done:'已完成'}
+const statusText={todo:'未完成',doing:'未完成',verify:'未完成',done:'完成'}
 const priorityType={P0:'danger',P1:'warning',P2:'primary',P3:'info'}
 const today=new Date().toISOString().slice(0,10);const selectedDate=ref(today)
 const weekDates=computed(()=>{const now=new Date();const day=now.getDay()||7;const monday=new Date(now);monday.setDate(now.getDate()-day+1);return Array.from({length:7},(_,i)=>{const date=new Date(monday);date.setDate(monday.getDate()+i);const key=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;return{key,label:`周${'一二三四五六日'[i]}`,date:`${date.getMonth()+1}/${date.getDate()}`,today:key===today}})})

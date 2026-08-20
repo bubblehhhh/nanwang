@@ -157,6 +157,22 @@ app.post('/api/auth/login', (req, res) => {
   ok(res, { token, user: safeUser }, '登录成功')
 })
 
+app.post('/api/auth/register', (req, res) => {
+  const { name, username, password, employeeNo, department } = req.body
+  if (!name || !username || !password) return fail(res, 400, '姓名、工号和密码均为必填')
+  if (password.length < 8 || !/[^A-Za-z0-9]/.test(password)) return fail(res, 400, '密码至少8位且含特殊字符')
+  const db = readDb()
+  if (db.users.some((u) => u.username === username || u.name === name)) return fail(res, 409, '该用户名或姓名已存在')
+  const mentor = db.users.find((u) => u.role === 'mentor')
+  const user = { id: nextId(db.users), username, name, employeeNo: employeeNo || `PSB-${new Date().getFullYear()}-${String(db.users.length + 1).padStart(3, '0')}`, password, role: 'apprentice', roleName: '组员', department: department || '广州供电局-运维检修部', position: '新入职组员', mentorId: mentor?.id || null, mentor: mentor?.name || '', avatar: name[0] || '新', goal: '掌握岗位基础技能及安全生产规程' }
+  db.users.push(user)
+  if (mentor) { mentor.apprenticeIds = [...(mentor.apprenticeIds || []), user.id]; db.tasks.filter((t) => t.creatorId === mentor.id) }
+  writeDb(db)
+  const safeUser = { ...user }; delete safeUser.password
+  const token = jwt.sign({ id: user.id, role: user.role, name: user.name }, process.env.JWT_SECRET, { expiresIn: '8h' })
+  ok(res, { token, user: safeUser }, '注册成功')
+})
+
 app.get('/api/dashboard', auth, (req, res) => {
   const db = readDb()
   const scope = req.user.role === 'mentor' ? db.tasks.filter((t) => [1, 2].includes(t.assigneeId)) : db.tasks.filter((t) => t.assigneeId === req.user.id)
@@ -452,7 +468,7 @@ app.post('/api/weekly-reviews', auth, (req, res) => {
   db.weeklyReviews.push(item); writeDb(db); ok(res, item, '周复盘已提交')
 })
 
-app.get('/api/care', auth, (req, res) => { const db = readDb(); ok(res, { emotion: db.emotions.find((e) => e.userId === req.user.id && e.date === new Date().toISOString().slice(0,10)), praise: db.praise, gratitude: db.gratitude || [], messages: db.messages.filter((m) => m.fromId === req.user.id || m.toId === req.user.id), users: db.users.map(({ password, ...user }) => user), actions: (db.careActions || []).filter(item => item.userId === req.user.id), config: db.moduleConfig[req.user.id] || null }) })
+app.get('/api/care', auth, (req, res) => { const db = readDb(); const scope = req.user.role === 'mentor' ? db.tasks.filter((t) => db.users.find(u => u.id === t.assigneeId)?.mentorId === req.user.id && t.status !== 'done') : db.tasks.filter((t) => t.assigneeId === req.user.id && t.status !== 'done'); ok(res, { emotion: db.emotions.find((e) => e.userId === req.user.id && e.date === new Date().toISOString().slice(0,10)), praise: db.praise, gratitude: db.gratitude || [], messages: db.messages.filter((m) => m.fromId === req.user.id || m.toId === req.user.id), users: db.users.map(({ password, ...user }) => user), actions: (db.careActions || []).filter(item => item.userId === req.user.id), config: db.moduleConfig[req.user.id] || null, pendingTasks: scope.map(t => ({ id: t.id, title: t.title, projectName: t.projectName, dueDate: t.dueDate, status: t.status })) }) })
 app.post('/api/care/emotion', auth, (req, res) => { const db = readDb(); const date = new Date().toISOString().slice(0,10); if (db.emotions.some((e) => e.userId === req.user.id && e.date === date)) return fail(res, 409, '今天已经完成情绪打卡'); const item = { id: nextId(db.emotions), userId: req.user.id, date, mood: req.body.mood }; db.emotions.push(item); writeDb(db); ok(res, item, '感谢你的分享') })
 app.post('/api/care/message', auth, (req, res) => { const db = readDb(); const target = db.users.find((u) => u.id === Number(req.body.toId)); const content = String(req.body.content || '').trim(); if (!target) return fail(res, 400, '请选择有效的对话对象'); if (!content) return fail(res, 400, '消息内容不能为空'); if (content.length > 300) return fail(res, 400, '消息内容不能超过300字'); const item = { id: nextId(db.messages), fromId: req.user.id, toId: target.id, from: req.user.name, content, time: new Date().toLocaleString('zh-CN', { hour12: false }) }; db.messages.push(item); writeDb(db); ok(res, item, '问候已发送') })
 app.post('/api/care/praise', auth, (req, res) => { const db = readDb(); const target = db.users.find((u) => u.id === Number(req.body.toId)); const content = String(req.body.content || '').trim(); if (!target || !content) return fail(res, 400, '请选择接收人并填写表扬内容'); const item = { id: nextId(db.praise), from: req.user.name, toId: target.id, content, style: req.body.style || '薪火橙', date: new Date().toISOString().slice(0,10) }; db.praise.push(item); writeDb(db); ok(res, item, '表扬卡已发送') })
