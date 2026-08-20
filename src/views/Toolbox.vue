@@ -128,9 +128,5 @@ async function extractPdf(confirmed = false) {
         <el-button type="primary" size="large" :icon="Download" :loading="extractLoading" @click="extractPdf">提取并下载</el-button>
       </section>
     </div>
-    <div class="security-note">
-      <b>文件安全说明</b>
-      <p>上传文件时系统会自动扫描手机号、身份证号、银行卡号、邮箱、密码与密钥等敏感信息，审核通过后方可处理。文件仅在本机后端临时处理，完成或失败后立即删除。</p>
-    </div>
   </div>
 </template>
