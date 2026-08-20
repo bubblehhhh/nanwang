@@ -269,8 +269,12 @@ app.get('/api/tasks/member-summary', auth, (req, res) => {
       verify: pending.filter((t) => t.status === 'verify').length
     }
     const byPriority = {
-      P1: pending.filter((t) => t.priority === 'P1').length,
-      P2: pending.filter((t) => t.priority === 'P2').length
+      P1: userTasks.filter((t) => t.priority === 'P1').length,
+      P2: userTasks.filter((t) => t.priority === 'P2').length
+    }
+    const byPriorityStatus = {
+      P1: { todo: userTasks.filter((t) => t.priority === 'P1' && t.status === 'todo').length, doing: userTasks.filter((t) => t.priority === 'P1' && t.status === 'doing').length, verify: userTasks.filter((t) => t.priority === 'P1' && t.status === 'verify').length, done: userTasks.filter((t) => t.priority === 'P1' && t.status === 'done').length },
+      P2: { todo: userTasks.filter((t) => t.priority === 'P2' && t.status === 'todo').length, doing: userTasks.filter((t) => t.priority === 'P2' && t.status === 'doing').length, verify: userTasks.filter((t) => t.priority === 'P2' && t.status === 'verify').length, done: userTasks.filter((t) => t.priority === 'P2' && t.status === 'done').length }
     }
     return {
       userId: user.id,
@@ -282,6 +286,7 @@ app.get('/api/tasks/member-summary', auth, (req, res) => {
       avgProgress: userTasks.length ? Math.round(userTasks.reduce((s, t) => s + (t.progress || 0), 0) / userTasks.length) : 0,
       byStatus,
       byPriority,
+      byPriorityStatus,
       tasks: pending.map((t) => ({ id: t.id, title: t.title, status: t.status, priority: t.priority, progress: t.progress, dueDate: t.dueDate }))
     }
   })
