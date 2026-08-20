@@ -9,10 +9,11 @@ import api, { errorText, unwrap } from './api'
 const route = useRoute(); const router = useRouter(); const auth = useAuthStore()
 const isLogin = computed(() => !!route.meta.public)
 const keyDialog = ref(false); const apiKey = ref(''); const keySaving = ref(false); const replacingKey = ref(false); const quotaDialog = ref(false)
-const menus = [
+const allMenus = [
   ['/', '工作台', House], ['/tasks', '任务中心', List], ['/smart-input', '智能拆解', MagicStick],
   ['/capabilities', '能力培养', Aim], ['/growth', '成长档案', Trophy], ['/work-library', '工作库', Document], ['/care', '人文关怀', Sunny], ['/toolbox', '百宝箱', Tools]
 ]
+const menus = computed(() => allMenus.filter(([, label]) => !(auth.user?.role === 'mentor' && label === '成长档案')))
 function logout() { auth.logout(); router.push('/login') }
 async function checkAiKey() {
   try { const data = unwrap(await api.get('/health')); keyDialog.value = !data.aiConfigured } catch { keyDialog.value = false }
