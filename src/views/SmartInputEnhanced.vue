@@ -8,8 +8,9 @@ const text = ref(''), tasks = ref([]), methods = ref(['WBS']), confirmed = ref(f
 const loading = ref(false), publishing = ref(false), warning = ref('')
 const source = ref(null), view = ref('cards'), fileName = ref('')
 const fileMeta = ref(null)
-const minutes = ref(null), minutesLoading = ref(false), minutesSaved = ref(false)
+const minutes = ref(null), minutesLoading = ref(false)
 const minutesAi = ref(false)
+const exportFormat = ref('docx'), exporting = ref(false)
 const apprentices = ref([])
 const publishDialog = ref(false)
 const desensitizeDialog = ref(false)
@@ -38,7 +39,7 @@ async function upload(o) {
   try {
     const d = unwrap(await api.post('/file/upload', fd))
     text.value = d.content; fileName.value = d.fileName
-    confirmed.value = false; minutes.value = null; minutesSaved.value = false; minutesAi.value = false
+    confirmed.value = false; minutes.value = null; minutesAi.value = false
     fileMeta.value = {
       type: d.fileType, label: d.fileLabel, icon: d.fileIcon, color: d.fileColor,
       processed: d.processed, needsManualInput: d.needsManualInput,
@@ -86,14 +87,28 @@ async function generateMinutes() {
   } catch (e) { ElMessage.error(errorText(e)) }
   finally { minutesLoading.value = false }
 }
-
-async function saveMinutes() {
+async function exportMinutes() {
   if (!minutes.value) return
+  exporting.value = true
   try {
-    await api.post('/meeting-minutes/save', { ...minutes.value, sourceText: text.value.slice(0, 2000) })
-    minutesSaved.value = true
-    ElMessage.success('会议纪要已保存')
-  } catch (e) { ElMessage.error(errorText(e)) }
+    const token = localStorage.getItem('xinhuo_token')
+    const res = await fetch('/api/meeting-minutes/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ minutes: minutes.value, format: exportFormat.value })
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.message || '导出失败')
+    }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `${minutes.value.title || '会议纪要'}.${exportFormat.value}`
+    a.click(); URL.revokeObjectURL(url)
+    ElMessage.success(`${exportFormat.value.toUpperCase()} 文件已导出`)
+  } catch (e) { ElMessage.error(e.message || '导出失败') }
+  finally { exporting.value = false }
 }
 
 async function split() {
@@ -192,48 +207,18 @@ async function confirmPublish() {
 
 <el-button v-if="confirmed && !minutes" class="split-btn" type="info" :icon="Document" :loading="minutesLoading" @click="generateMinutes">生成会议纪要</el-button>
 
-<div v-if="minutes" class="minutes-panel">
-<div class="minutes-header">
-<div>
-<b>{{ minutes.title }}</b>
-<small v-if="minutes.date">{{ minutes.date }} {{ minutes.location }}</small>
+<div v-if="minutes" class="minutes-export-bar">
+<span class="minutes-export-label">会议纪要已生成</span>
+<div class="minutes-export-actions">
+<el-radio-group v-model="exportFormat" size="small">
+<el-radio-button value="docx">Word</el-radio-button>
+<el-radio-button value="pdf">PDF</el-radio-button>
+</el-radio-group>
+<el-button size="small" type="primary" :loading="exporting" @click="exportMinutes">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+导出
+</el-button>
 </div>
-<div class="minutes-actions">
-<el-button v-if="!minutesSaved" size="small" type="success" @click="saveMinutes">保存纪要</el-button>
-<el-tag v-else type="success" size="small">已保存</el-tag>
-</div>
-</div>
-
-<div v-if="minutes.attendees?.length" class="minutes-section">
-<small>参会人员</small>
-<div class="attendee-tags">
-<el-tag v-for="(p, i) in minutes.attendees" :key="i" size="small">{{ p }}</el-tag>
-</div>
-</div>
-
-<div v-for="(ag, i) in minutes.agenda" :key="i" class="agenda-item">
-<div class="agenda-topic">
-<span class="topic-num">{{ i + 1 }}</span>
-<b>{{ ag.topic }}</b>
-</div>
-<p class="agenda-discussion">{{ ag.discussion }}</p>
-<div v-if="ag.actionItems?.length" class="action-items">
-<div v-for="(a, j) in ag.actionItems" :key="j" class="action-item">
-<el-checkbox />
-<span>{{ a.task }}</span>
-<small v-if="a.owner">{{ a.owner }}</small>
-<small v-if="a.dueDate">截止：{{ a.dueDate }}</small>
-</div>
-</div>
-</div>
-
-<div v-if="minutes.decisions?.length" class="minutes-section">
-<small>决议</small>
-<ul><li v-for="(d, i) in minutes.decisions" :key="i">{{ d }}</li></ul>
-</div>
-
-<el-alert v-if="warning && !minutesAi" :title="warning" type="warning" :closable="false" />
-<el-button class="split-btn" type="info" plain size="small" @click="minutes = null; minutesSaved = false; minutesAi = false">重新生成</el-button>
 </div>
 
 <header>
@@ -285,7 +270,7 @@ async function confirmPublish() {
 
 <el-table v-else-if="tasks.length && view === 'table'" :data="tasks" stripe>
 <el-table-column width="45"><template #default="s"><el-checkbox v-model="s.row.selected" /></template></el-table-column>
-<el-table-column prop="title" label="任务" min-width="190" />
+<el-table-column prop="title" label="任务" min-width="190" show-overflow-tooltip />
 <el-table-column prop="priority" label="等级" width="70" />
 <el-table-column prop="method" label="方法" width="100" />
 <el-table-column prop="dueDate" label="期限" width="110" />
@@ -394,6 +379,7 @@ async function confirmPublish() {
 .method-grid b,.method-grid small{display:block}
 .method-grid small{font-size:12px;color:#8490a0}
 .split-btn{width:100%;margin-top:12px}
+<<<<<<< Updated upstream
 .minutes-panel{background:#f8fafc;border:1px solid #e2e7ed;padding:14px;margin:8px 0 18px}
 .minutes-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
 .minutes-header b{font-size:14px;display:block}
@@ -417,6 +403,20 @@ async function confirmPublish() {
 .task-cards small{display:block}
 .task-assign{display:flex;align-items:center;gap:6px;margin-top:6px}
 .task-assign span{font-size:13px;color:#8390a1}
+=======
+.minutes-export-bar{display:flex;align-items:center;justify-content:space-between;background:#f0f7f4;border:1px solid #c9e0d6;padding:10px 14px;margin:8px 0 18px;border-radius:4px}
+.minutes-export-label{font-size:13px;font-weight:bold;color:#087c66;display:flex;align-items:center;gap:6px}
+.minutes-export-label::before{content:'';width:6px;height:6px;border-radius:50%;background:#087c66}
+.minutes-export-actions{display:flex;align-items:center;gap:8px}
+.task-cards{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+.task-cards article{display:grid;grid-template-columns:auto 1fr auto;gap:9px;border:1px solid #e3e8ed;padding:12px;overflow:hidden}
+.task-cards article>div{min-width:0;overflow:hidden}
+.task-cards article>div>span{font-size:10px;color:#087c66}
+.task-cards p,.task-cards small{font-size:11px;color:#69778a;line-height:1.5;word-break:break-word;overflow-wrap:break-word}
+.task-cards small{display:block}
+.task-cards :deep(.el-input){width:100%}
+.task-assign{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
+>>>>>>> Stashed changes
 .mind-map{display:grid;grid-template-columns:180px 1fr;align-items:center;min-height:420px}
 .mind-root{background:#087c66;color:#fff;padding:18px;text-align:center;border-radius:6px}
 .mind-root small{display:block;margin-top:5px}
