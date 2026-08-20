@@ -7,7 +7,7 @@ import { House, List, MagicStick, Trophy, Document, Sunny, Tools, SwitchButton, 
 import api, { errorText, unwrap } from './api'
 
 const route = useRoute(); const router = useRouter(); const auth = useAuthStore()
-const isLogin = computed(() => route.path === '/login')
+const isLogin = computed(() => !!route.meta.public)
 const keyDialog = ref(false); const apiKey = ref(''); const keySaving = ref(false); const replacingKey = ref(false); const quotaDialog = ref(false)
 const menus = [
   ['/', '工作台', House], ['/tasks', '任务中心', List], ['/smart-input', '智能拆解', MagicStick],
