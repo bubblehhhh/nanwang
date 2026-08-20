@@ -26,6 +26,8 @@ router.beforeEach((to) => {
   const loggedIn = Boolean(localStorage.getItem('xinhuo_token'))
   if (!to.meta.public && !loggedIn) return '/login'
   if (to.path === '/login' && loggedIn) return '/'
+  const user = JSON.parse(localStorage.getItem('xinhuo_user') || 'null')
+  if (to.path === '/growth' && user?.role === 'mentor') return '/'
 })
 export default router
 
