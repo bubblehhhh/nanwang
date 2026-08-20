@@ -39,7 +39,10 @@ async function submit() {
           <el-form-item label="登录密码"><el-input v-model="form.password" size="large" :prefix-icon="Lock" type="password" show-password placeholder="至少8位并含特殊字符" @keyup.enter="submit" /></el-form-item>
           <el-button class="login-submit" type="primary" size="large" :loading="loading" @click="submit">进入工作台 <el-icon><ArrowRight /></el-icon></el-button>
         </el-form>
-        <p class="login-tip">演示账号已自动填入，可直接登录</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px">
+          <el-link type="primary" :underline="false" @click="router.push('/forgot-password')">忘记密码？</el-link>
+          <span class="login-tip">演示账号已自动填入</span>
+        </div>
       </div>
     </section>
   </div>
