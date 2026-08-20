@@ -1,19 +1,184 @@
-﻿<script setup>
+<script setup>
 import { computed, onMounted, ref } from 'vue'
 import { Trophy, Medal } from '@element-plus/icons-vue'
 import api, { unwrap } from '../api'
-const data = ref({ points: 0, taskPoints: 0, bonusPoints: 0, rank: '星星', next: 100, percent: 0, weights: {}, milestones: [], tasks: [], likes: [] })
-const dateRange = ref([])
-const filteredMilestones = computed(() => data.value.milestones.filter(item => (!dateRange.value?.[0] || item.date >= dateRange.value[0]) && (!dateRange.value?.[1] || item.date <= dateRange.value[1])).slice().reverse())
-onMounted(async () => { data.value = unwrap(await api.get('/growth')) })
-</script>
-<template><div class="page growthx"><div class="page-title"><div><p class="eyebrow">GROWTH RECORD</p><h1>成长档案</h1><p>每项任务都有明确积分，师傅点赞形成额外正向反馈</p></div></div>
-<section class="growth-summary"><div class="rank-mark"><Trophy/><b>{{data.rank}}</b></div><div class="rank-progress"><span>当前成长积分</span><h2>{{data.points}}</h2><el-progress :percentage="data.percent" :stroke-width="10"/><small>任务 {{data.taskPoints}} + 点赞奖励 {{data.bonusPoints}}，距下一阶段 {{Math.max(0,data.next-data.points)}} 分</small></div><div class="score-break"><div><span>完成积分</span><b>{{data.taskPoints}}</b></div><div><span>点赞奖励</span><b>+{{data.bonusPoints}}</b></div></div></section>
-<div class="growthx-grid"><section class="gx-panel timeline"><header><div><h2>成长时间线</h2><p>滚动查看任务、评价与阶段成果</p></div><el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" clearable/></header><div class="timeline-scroll"><el-timeline><el-timeline-item v-for="item in filteredMilestones" :key="item.id" :timestamp="item.date" color="#087c66"><b>{{item.title}}</b><p>{{item.description}}</p></el-timeline-item></el-timeline><el-empty v-if="!filteredMilestones.length" description="该日期范围暂无成长记录" :image-size="50"/></div></section>
-<section class="gx-panel"><header><h2>进度构成</h2><p>每个比例只显示一次，便于快速比较</p></header><div class="weight-clean"><div v-for="(v,k) in data.weights" :key="k"><span>{{{schedule:'个人日程',meeting:'会议行动项',practice:'实操记录',supplement:'补充材料'}[k]}}</span><el-progress :percentage="v" :stroke-width="9"/></div></div></section>
-<section class="gx-panel"><header><h2>任务积分明细</h2><p>完成度决定当前获得积分</p></header><div class="reward-list"><article v-for="task in data.tasks" :key="task.id"><div><b>{{task.title}}</b><span>{{task.status==='done'?'已完成':`进度 ${task.progress}%`}}</span></div><strong>+{{Math.round((task.points||50)*task.progress/100)}}<small>/ {{task.points||50}}</small></strong></article></div></section>
-<section class="gx-panel likes-panel"><header><h2>师傅点赞</h2><p>优秀任务会获得即时积分奖励</p></header><article v-for="like in data.likes" :key="like.id"><Medal/><div><b>{{like.taskTitle}}</b><p>{{like.comment}}</p><small>{{like.from}} · {{like.date}}</small></div><strong>+{{like.points}}</strong></article><el-empty v-if="!data.likes.length" description="完成高质量任务，等待师傅点赞" :image-size="55"/></section></div></div></template>
-<style scoped>
-.growth-summary{background:#fff;border:1px solid #e2e8ed;padding:20px;display:grid;grid-template-columns:120px 1fr 270px;gap:24px;align-items:center;margin-bottom:14px}.rank-mark{height:92px;background:#087c66;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:6px}.rank-mark svg{width:30px}.rank-mark b{margin-top:7px}.rank-progress span,.score-break span{font-size:14px;color:#7e8a9b}.rank-progress h2{font-size:32px;margin:2px 0 7px}.rank-progress small{display:block;margin-top:8px;color:#7e8a9b}.score-break{display:grid;grid-template-columns:1fr 1fr;gap:8px}.score-break div{background:#f5f8f8;padding:14px}.score-break b{display:block;font-size:22px;margin-top:4px;color:#087c66}.growthx-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.gx-panel{background:#fff;border:1px solid #e2e8ed;padding:18px;min-width:0}.gx-panel header{margin-bottom:14px}.gx-panel h2{font-size:16px;margin:0 0 4px}.gx-panel header p{font-size:14px;color:#8490a0;margin:0}.timeline{max-height:360px}.timeline header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.timeline header .el-date-editor{width:240px}.timeline-scroll{height:265px;overflow-y:auto;overscroll-behavior:contain;padding:5px 12px 0 2px;scrollbar-width:thin;scrollbar-color:#9fb5af #edf2f1}.timeline-scroll::-webkit-scrollbar{width:6px}.timeline-scroll::-webkit-scrollbar-thumb{background:#9fb5af;border-radius:3px}.timeline-scroll::-webkit-scrollbar-track{background:#edf2f1}.weight-clean>div{display:grid;grid-template-columns:90px 1fr;align-items:center;gap:12px;margin:17px 0}.weight-clean span{font-size:15px}.reward-list article,.likes-panel article{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid #edf0f3}.reward-list span{display:block;font-size:13px;color:#8490a0;margin-top:4px}.reward-list strong,.likes-panel strong{color:#087c66;font-size:18px}.reward-list strong small{font-size:13px;color:#9aa3af}.likes-panel article>svg{width:24px;color:#e7a329}.likes-panel article>div{flex:1}.likes-panel p,.timeline p{font-size:15px;color:#58677a;margin:4px 0}.likes-panel small{color:#8b96a5}@media(max-width:800px){.growth-summary{grid-template-columns:80px 1fr}.score-break{grid-column:1/-1}.growthx-grid{grid-template-columns:1fr}.timeline header{display:block}.timeline header .el-date-editor{width:100%;margin-top:10px}}
-</style>
 
+const data = ref({
+  points: 0,
+  taskPoints: 0,
+  bonusPoints: 0,
+  rank: '星星',
+  next: 100,
+  percent: 0,
+  weights: {},
+  milestones: [],
+  tasks: [],
+  likes: [],
+  praise: []
+})
+
+const dateRange = ref([])
+const filteredMilestones = computed(() =>
+  data.value.milestones
+    .filter(item => (!dateRange.value?.[0] || item.date >= dateRange.value[0]) && (!dateRange.value?.[1] || item.date <= dateRange.value[1]))
+    .slice()
+    .reverse()
+)
+
+onMounted(async () => {
+  data.value = unwrap(await api.get('/growth'))
+})
+</script>
+
+<template>
+  <div class="page growthx">
+    <div class="page-title">
+      <div>
+        <p class="eyebrow">GROWTH RECORD</p>
+        <h1>成长档案</h1>
+        <p>每项任务都有明确积分，师傅点赞与表扬卡都会沉淀为成长反馈</p>
+      </div>
+    </div>
+
+    <section class="growth-summary">
+      <div class="rank-mark"><Trophy /><b>{{ data.rank }}</b></div>
+      <div class="rank-progress">
+        <span>当前成长积分</span>
+        <h2>{{ data.points }}</h2>
+        <el-progress :percentage="data.percent" :stroke-width="10" />
+        <small>任务 {{ data.taskPoints }} + 点赞奖励 {{ data.bonusPoints }}，距下一阶段 {{ Math.max(0, data.next - data.points) }} 分</small>
+      </div>
+      <div class="score-break">
+        <div><span>完成积分</span><b>{{ data.taskPoints }}</b></div>
+        <div><span>点赞奖励</span><b>+{{ data.bonusPoints }}</b></div>
+      </div>
+    </section>
+
+    <div class="growthx-grid">
+      <section class="gx-panel timeline">
+        <header>
+          <div>
+            <h2>成长时间线</h2>
+            <p>滚动查看任务、评价、点赞和表扬反馈</p>
+          </div>
+          <el-date-picker
+            v-model="dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            clearable
+          />
+        </header>
+        <div class="timeline-scroll">
+          <el-timeline>
+            <el-timeline-item v-for="item in filteredMilestones" :key="item.id" :timestamp="item.date" color="#087c66">
+              <b>{{ item.title }}</b>
+              <p>{{ item.description }}</p>
+            </el-timeline-item>
+          </el-timeline>
+          <el-empty v-if="!filteredMilestones.length" description="该日期范围暂无成长记录" :image-size="50" />
+        </div>
+      </section>
+
+      <section class="gx-panel">
+        <header>
+          <h2>进度构成</h2>
+          <p>每个比例只显示一次，便于快速比较</p>
+        </header>
+        <div class="weight-clean">
+          <div v-for="(v, k) in data.weights" :key="k">
+            <span>{{ { schedule: '个人日程', meeting: '会议行动项', practice: '实操记录', supplement: '补充材料' }[k] }}</span>
+            <el-progress :percentage="v" :stroke-width="9" />
+          </div>
+        </div>
+      </section>
+
+      <section class="gx-panel">
+        <header>
+          <h2>任务积分明细</h2>
+          <p>完成度决定当前获得积分</p>
+        </header>
+        <div class="reward-list">
+          <article v-for="task in data.tasks" :key="task.id">
+            <div>
+              <b>{{ task.title }}</b>
+              <span>{{ task.status === 'done' ? '已完成' : `进度 ${task.progress}%` }}</span>
+            </div>
+            <strong>+{{ Math.round((task.points || 50) * task.progress / 100) }}<small>/ {{ task.points || 50 }}</small></strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="gx-panel likes-panel">
+        <header>
+          <h2>师傅点赞</h2>
+          <p>优秀任务会获得即时积分奖励</p>
+        </header>
+        <article v-for="like in data.likes" :key="like.id">
+          <Medal />
+          <div>
+            <b>{{ like.taskTitle }}</b>
+            <p>{{ like.comment }}</p>
+            <small>{{ like.from }} · {{ like.date }}</small>
+          </div>
+          <strong>+{{ like.points }}</strong>
+        </article>
+        <el-empty v-if="!data.likes.length" description="完成高质量任务，等待师傅点赞" :image-size="55" />
+      </section>
+
+      <section class="gx-panel praise-panel">
+        <header>
+          <h2>收到的表扬卡</h2>
+          <p>师傅的鼓励会原文保留在这里</p>
+        </header>
+        <article v-for="item in data.praise" :key="item.id">
+          <Medal />
+          <div>
+            <b>{{ item.from }} 的表扬卡</b>
+            <p>{{ item.content }}</p>
+            <small>{{ item.date }}</small>
+          </div>
+          <el-tag effect="plain" type="warning">{{ item.style || '表扬' }}</el-tag>
+        </article>
+        <el-empty v-if="!data.praise.length" description="暂未收到表扬卡" :image-size="55" />
+      </section>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.growth-summary{background:#fff;border:1px solid #e2e8ed;padding:20px;display:grid;grid-template-columns:120px 1fr 270px;gap:24px;align-items:center;margin-bottom:14px}
+.rank-mark{height:92px;background:#087c66;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:6px}
+.rank-mark svg{width:30px}
+.rank-mark b{margin-top:7px}
+.rank-progress span,.score-break span{font-size:14px;color:#7e8a9b}
+.rank-progress h2{font-size:32px;margin:2px 0 7px}
+.rank-progress small{display:block;margin-top:8px;color:#7e8a9b}
+.score-break{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.score-break div{background:#f5f8f8;padding:14px}
+.score-break b{display:block;font-size:22px;margin-top:4px;color:#087c66}
+.growthx-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.gx-panel{background:#fff;border:1px solid #e2e8ed;padding:18px;min-width:0}
+.gx-panel header{margin-bottom:14px}
+.gx-panel h2{font-size:16px;margin:0 0 4px}
+.gx-panel header p{font-size:14px;color:#8490a0;margin:0}
+.timeline{max-height:360px}
+.timeline header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.timeline header .el-date-editor{width:240px}
+.timeline-scroll{height:265px;overflow-y:auto;overscroll-behavior:contain;padding:5px 12px 0 2px;scrollbar-width:thin;scrollbar-color:#9fb5af #edf2f1}
+.timeline-scroll::-webkit-scrollbar{width:6px}
+.timeline-scroll::-webkit-scrollbar-thumb{background:#9fb5af;border-radius:3px}
+.timeline-scroll::-webkit-scrollbar-track{background:#edf2f1}
+.weight-clean>div{display:grid;grid-template-columns:90px 1fr;align-items:center;gap:12px;margin:17px 0}
+.weight-clean span{font-size:15px}
+.reward-list article,.likes-panel article,.praise-panel article{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid #edf0f3}
+.reward-list span{display:block;font-size:13px;color:#8490a0;margin-top:4px}
+.reward-list strong,.likes-panel strong{color:#087c66;font-size:18px}
+.reward-list strong small{font-size:13px;color:#9aa3af}
+.likes-panel article>svg,.praise-panel article>svg{width:24px;color:#e7a329}
+.likes-panel article>div,.praise-panel article>div{flex:1}
+.likes-panel p,.praise-panel p,.timeline p{font-size:15px;color:#58677a;margin:4px 0}
+.likes-panel small,.praise-panel small{color:#8b96a5}
+@media(max-width:800px){.growth-summary{grid-template-columns:80px 1fr}.score-break{grid-column:1/-1}.growthx-grid{grid-template-columns:1fr}.timeline header{display:block}.timeline header .el-date-editor{width:100%;margin-top:10px}}
+</style>

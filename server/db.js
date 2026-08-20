@@ -51,8 +51,8 @@ const seed = {
     { id: 302, userId: 1, date: '2026-08-16', title: '首次独立完成设备巡视', description: '巡视记录规范，无遗漏点位。', type: '实操里程碑' }
   ],
   messages: [
-    { id: 401, fromId: 3, toId: 1, from: '李四', content: '今天辛苦了，记得提交培训心得哦。', time: `${today} 09:20` },
-    { id: 402, fromId: 1, toId: 3, from: '张三', content: '收到师傅，巡视结束后马上整理。', time: `${today} 09:25` }
+    { id: 401, fromId: 3, toId: 1, from: '李四', content: '今天辛苦了，记得提交培训心得哦。', time: `${today} 09:20`, createdAt: `${today}T09:20:00+08:00`, readBy: [3], generatedTasks: [] },
+    { id: 402, fromId: 1, toId: 3, from: '张三', content: '收到师傅，巡视结束后马上整理。', time: `${today} 09:25`, createdAt: `${today}T09:25:00+08:00`, readBy: [1, 3], generatedTasks: [] }
   ],
   mentorNotes: [
     { id: 451, mentorId: 3, toId: 1, content: '巡视前先核对风险预控卡，遇到不确定的异常现象先停、再报、后处置。', tone: 'safety', date: today },
@@ -60,7 +60,7 @@ const seed = {
   ],
   taskLikes: [],
   emotions: [{ id: 501, userId: 1, date: today, mood: '开心' }],
-  praise: [{ id: 601, from: '李四', toId: 1, content: '主动帮助同事排查问题，表现优秀。', style: '薪火橙', date: today }],
+  praise: [{ id: 601, fromId: 3, from: '李四', toId: 1, to: '张三', content: '主动帮助同事排查问题，表现优秀。', style: '薪火橙', date: today }],
   gratitude: [{ id: 701, from: '张三', to: '李四', content: '感谢师傅耐心讲解设备巡视的风险点。', date: today }],
   careActions: [],
   moduleConfig: {},
@@ -85,6 +85,7 @@ export function initDb() {
     if (!db.gratitude) { db.gratitude = seed.gratitude; changed = true }
     if (!db.careActions) { db.careActions = []; changed = true }
     if (!db.resetCodes) { db.resetCodes = {}; changed = true }
+    if (!db.messages) { db.messages = seed.messages; changed = true }
     const seedUserMap = { 1: '13800138001', 2: '13800138002', 3: '13800138003' }
     db.users.forEach((u) => { if (!u.phone && seedUserMap[u.id]) { u.phone = seedUserMap[u.id]; changed = true } })
     for (const field of ['skillCatalog', 'competencyAssessments', 'safetyCases', 'weeklyReviews']) {
@@ -94,11 +95,24 @@ export function initDb() {
       if (!db[field]) { db[field] = seed[field]; changed = true }
     }
     if (!db.tasks.some(task => task.id === 102)) { db.tasks.push(seed.tasks[1]); changed = true }
+    if (!db.praise) { db.praise = seed.praise; changed = true }
+    db.praise.forEach(item => {
+      const target = db.users.find(user => user.id === Number(item.toId))
+      const source = db.users.find(user => user.name === item.from || user.id === Number(item.fromId))
+      if (!item.fromId && source) { item.fromId = source.id; changed = true }
+      if (!item.to && target) { item.to = target.name; changed = true }
+    })
     db.tasks.forEach(task => {
       if (!task.skillIds) { task.skillIds = task.workCategory === 'meeting' ? ['COOP-01'] : ['DATA-01']; changed = true }
       if (!task.riskPoints) { task.riskPoints = []; changed = true }
       if (!task.evidenceRequired) { task.evidenceRequired = ['工作记录']; changed = true }
       if (!task.points) { task.points = ({ P1: 80, P2: 50 })[task.priority] || 50; changed = true }
+    })
+    db.messages.forEach(message => {
+      if (!message.createdAt) { message.createdAt = `${String(message.time || today).replace(' ', 'T')}:00+08:00`; changed = true }
+      if (!Array.isArray(message.readBy)) { message.readBy = [message.fromId]; changed = true }
+      if (!message.readBy.includes(message.fromId)) { message.readBy.push(message.fromId); changed = true }
+      if (!Array.isArray(message.generatedTasks)) { message.generatedTasks = []; changed = true }
     })
     if (changed) fs.writeFileSync(dataFile, JSON.stringify(db, null, 2), 'utf8')
   }

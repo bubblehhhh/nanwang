@@ -5,6 +5,7 @@
       "username": "zhangsan",
       "name": "张三",
       "employeeNo": "PSB-2024-001",
+      "phone": "13800138001",
       "password": "Abc@123456",
       "role": "apprentice",
       "roleName": "组员",
@@ -13,14 +14,14 @@
       "mentorId": 3,
       "mentor": "李四",
       "avatar": "张",
-      "goal": "掌握220kV变电站一次设备运维技能及事故处理流程",
-      "phone": "13800138001"
+      "goal": "掌握220kV变电站一次设备运维技能及事故处理流程"
     },
     {
       "id": 2,
       "username": "zhaoliu",
       "name": "赵六",
       "employeeNo": "PSB-2024-002",
+      "phone": "13800138002",
       "password": "Abc@123456",
       "role": "apprentice",
       "roleName": "组员",
@@ -29,14 +30,14 @@
       "mentorId": 3,
       "mentor": "李四",
       "avatar": "赵",
-      "goal": "掌握继电保护装置调试、定值整定及故障分析技能",
-      "phone": "13800138002"
+      "goal": "掌握继电保护装置调试、定值整定及故障分析技能"
     },
     {
       "id": 3,
       "username": "lisi",
       "name": "李四",
       "employeeNo": "PSB-2005-088",
+      "phone": "13800138003",
       "password": "Abc@123456",
       "role": "mentor",
       "roleName": "组长",
@@ -47,58 +48,44 @@
         2
       ],
       "avatar": "李",
-      "goal": "培养新员工独立完成一次设备运维及继电保护调试基础工作",
-      "phone": "13800138003"
+      "goal": "培养新员工独立完成一次设备运维及继电保护调试基础工作"
     }
   ],
-  "loginAttempts": {
-    "张三": {
-      "count": 0,
-      "lockedUntil": 0
-    },
-    "李四": {
-      "count": 0,
-      "lockedUntil": 0
-    },
-    "lisi": {
-      "count": 0,
-      "lockedUntil": 0
-    },
-    "zhangsan": {
-      "count": 0,
-      "lockedUntil": 0
-    }
-  },
+  "loginAttempts": {},
+  "resetCodes": {},
   "tasks": [
     {
       "id": 101,
       "title": "完成220kV设备巡视记录",
       "description": "按巡视规范完成一次设备检查并上传记录",
       "priority": "P1",
+      "workCategory": "project",
+      "projectName": "220kV变电站运维提升项目",
+      "startTime": "09:00",
+      "endTime": "10:30",
       "assigneeId": 1,
       "assignee": "张三",
       "creatorId": 3,
       "source": "导师任务",
-      "status": "done",
-      "progress": 100,
-      "dueDate": "2026-08-19",
+      "status": "doing",
+      "progress": 65,
+      "dueDate": "2026-08-20",
       "standard": "巡视点位完整，异常项附照片",
       "points": 80,
       "method": "四象限法",
-      "createdAt": "2026-08-19",
-      "mentorComment": "符合完成标准，同意核销。",
-      "completedAt": "2026-08-19",
-      "workCategory": "project",
-      "projectName": "专项项目任务",
-      "startTime": "08:30",
-      "endTime": "09:30",
       "skillIds": [
-        "DATA-01"
+        "OPS-01",
+        "SAFE-01"
       ],
-      "riskPoints": [],
+      "riskPoints": [
+        "设备带电区域保持安全距离",
+        "发现异常不得擅自处置"
+      ],
       "evidenceRequired": [
-        "工作记录"
-      ]
+        "巡视记录",
+        "异常点照片"
+      ],
+      "createdAt": "2026-08-20"
     },
     {
       "id": 102,
@@ -115,7 +102,7 @@
       "source": "导师任务",
       "status": "done",
       "progress": 100,
-      "dueDate": "2026-08-19",
+      "dueDate": "2026-08-20",
       "standard": "账物一致，异常项有记录和闭环责任人",
       "points": 60,
       "method": "PDCA",
@@ -130,392 +117,9 @@
         "检查清单",
         "更新后台账"
       ],
-      "createdAt": "2026-08-19",
-      "completedAt": "2026-08-19",
+      "createdAt": "2026-08-20",
+      "completedAt": "2026-08-20",
       "mentorComment": "检查细致，台账记录完整。"
-    },
-    {
-      "id": 103,
-      "title": "核对工器具清单",
-      "description": "张三梳理需准备的工器具，并与赵六共同核对工器具清单，确保所有检修所需工器具齐全可用。",
-      "priority": "P1",
-      "dueDate": "2026-08-21",
-      "standard": "工器具清单与标准配置一致，无缺失，且状态良好。",
-      "method": "张三列出清单，赵六共同对照实际工器具逐项清点确认。",
-      "points": 60,
-      "workCategory": "meeting",
-      "projectName": "会议行动项",
-      "source": "会议导入",
-      "startTime": "09:00",
-      "endTime": "10:00",
-      "selected": true,
-      "assigneeId": 1,
-      "skillIds": [
-        "COOP-01",
-        "SAFE-01"
-      ],
-      "riskPoints": [
-        "作业前确认任务边界和安全条件",
-        "出现异常立即停止并报告"
-      ],
-      "evidenceRequired": [
-        "工作记录",
-        "成果或现场佐证",
-        "复盘说明"
-      ],
-      "assignee": "张三",
-      "creatorId": 1,
-      "progress": 0,
-      "status": "todo",
-      "createdAt": "2026-08-20"
-    },
-    {
-      "id": 104,
-      "title": "办理第一种工作票",
-      "description": "根据检修任务办理第一种工作票，包含主变本体、有载分接开关、冷却系统、绝缘油采样、端子箱及继电保护相关检修内容。",
-      "priority": "P1",
-      "dueDate": "2026-08-22",
-      "standard": "工作票填写正确，审批流程完成，具备开工条件。",
-      "method": "按照工作票办理流程，将检修任务和安措填入工作票，并提交审批。",
-      "points": 70,
-      "workCategory": "meeting",
-      "projectName": "会议行动项",
-      "source": "会议导入",
-      "startTime": "10:00",
-      "endTime": "11:00",
-      "selected": true,
-      "assigneeId": 1,
-      "skillIds": [
-        "COOP-01",
-        "SAFE-01"
-      ],
-      "riskPoints": [
-        "作业前确认任务边界和安全条件",
-        "出现异常立即停止并报告"
-      ],
-      "evidenceRequired": [
-        "工作记录",
-        "成果或现场佐证",
-        "复盘说明"
-      ],
-      "assignee": "张三",
-      "creatorId": 1,
-      "progress": 0,
-      "status": "todo",
-      "createdAt": "2026-08-20"
-    },
-    {
-      "id": 105,
-      "title": "调出保护定值单并核对",
-      "description": "调出#2主变保护定值单，与当前运行定值核对，确保与保护装置实际定值一致。",
-      "priority": "P1",
-      "dueDate": "2026-08-20",
-      "standard": "定值单与保护装置定值一致，核对记录完整。",
-      "method": "从保护定值管理系统调出定值单，现场或后台核对保护装置定值。",
-      "points": 65,
-      "workCategory": "meeting",
-      "projectName": "会议行动项",
-      "source": "会议导入",
-      "startTime": "11:00",
-      "endTime": "12:00",
-      "selected": true,
-      "assigneeId": 1,
-      "skillIds": [
-        "COOP-01",
-        "SAFE-01"
-      ],
-      "riskPoints": [
-        "作业前确认任务边界和安全条件",
-        "出现异常立即停止并报告"
-      ],
-      "evidenceRequired": [
-        "工作记录",
-        "成果或现场佐证",
-        "复盘说明"
-      ],
-      "assignee": "张三",
-      "creatorId": 1,
-      "progress": 0,
-      "status": "todo",
-      "createdAt": "2026-08-20"
-    },
-    {
-      "id": 106,
-      "title": "准备保护装置测试仪",
-      "description": "准备用于保护装置检修和传动的测试仪器，确保测试仪功能正常、接线齐全。",
-      "priority": "P2",
-      "dueDate": "2026-08-22",
-      "standard": "测试仪外观完好，精度校验合格，配件齐全。",
-      "method": "根据测试仪清单清点设备，并进行通电自检。",
-      "points": 55,
-      "workCategory": "meeting",
-      "projectName": "会议行动项",
-      "source": "会议导入",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "selected": true,
-      "assigneeId": 1,
-      "skillIds": [
-        "COOP-01",
-        "SAFE-01"
-      ],
-      "riskPoints": [
-        "作业前确认任务边界和安全条件",
-        "出现异常立即停止并报告"
-      ],
-      "evidenceRequired": [
-        "工作记录",
-        "成果或现场佐证",
-        "复盘说明"
-      ],
-      "assignee": "张三",
-      "creatorId": 1,
-      "progress": 0,
-      "status": "todo",
-      "createdAt": "2026-08-20"
-    },
-    {
-      "id": 107,
-      "title": "复习保护原理图和接线图",
-      "description": "复习#2主变保护原理图和二次接线图，重点记忆非电量保护回路和瓦斯继电器传动试验相关接线。",
-      "priority": "P2",
-      "dueDate": "2026-08-21",
-      "standard": "能准确回答图纸中关键回路和元件位置。",
-      "method": "阅读保护图纸，结合现场实际设备进行比对，必要时向师傅请教。",
-      "points": 70,
-      "workCategory": "meeting",
-      "projectName": "会议行动项",
-      "source": "会议导入",
-      "startTime": "13:00",
-      "endTime": "14:00",
-      "selected": true,
-      "assigneeId": 1,
-      "skillIds": [
-        "COOP-01",
-        "SAFE-01"
-      ],
-      "riskPoints": [
-        "作业前确认任务边界和安全条件",
-        "出现异常立即停止并报告"
-      ],
-      "evidenceRequired": [
-        "工作记录",
-        "成果或现场佐证",
-        "复盘说明"
-      ],
-      "assignee": "张三",
-      "creatorId": 1,
-      "progress": 0,
-      "status": "todo",
-      "createdAt": "2026-08-20"
-    },
-    {
-      "id": 108,
-      "title": "查看#2主变历史缺陷记录",
-      "description": "查询#2主变历史缺陷记录，重点查看有载分接开关档位计数器卡住相关缺陷，分析风险并制定防范措施。",
-      "priority": "P1",
-      "dueDate": "2026-08-19",
-      "standard": "完整查看历史缺陷记录，输出缺陷分析要点。",
-      "method": "从生产管理系统中检索#2主变历史缺陷，整理分析。",
-      "points": 65,
-      "workCategory": "meeting",
-      "projectName": "会议行动项",
-      "source": "会议导入",
-      "startTime": "14:00",
-      "endTime": "15:00",
-      "selected": true,
-      "assigneeId": 1,
-      "skillIds": [
-        "COOP-01",
-        "SAFE-01"
-      ],
-      "riskPoints": [
-        "作业前确认任务边界和安全条件",
-        "出现异常立即停止并报告"
-      ],
-      "evidenceRequired": [
-        "工作记录",
-        "成果或现场佐证",
-        "复盘说明"
-      ],
-      "assignee": "张三",
-      "creatorId": 1,
-      "progress": 0,
-      "status": "todo",
-      "createdAt": "2026-08-20"
-    },
-    {
-      "id": 109,
-      "title": "领取绝缘油采样瓶",
-      "description": "确定绝缘油采样瓶领取安排，领取足量且清洁的采样瓶，并确认采样标签和密封工具。",
-      "priority": "P2",
-      "dueDate": "2026-08-21",
-      "standard": "采样瓶数量充足、清洁无损，标签齐全。",
-      "method": "向油化班领取并检查采样瓶，登记领取数量。",
-      "points": 50,
-      "workCategory": "meeting",
-      "projectName": "会议行动项",
-      "source": "会议导入",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "selected": true,
-      "assigneeId": 1,
-      "skillIds": [
-        "COOP-01",
-        "SAFE-01"
-      ],
-      "riskPoints": [
-        "作业前确认任务边界和安全条件",
-        "出现异常立即停止并报告"
-      ],
-      "evidenceRequired": [
-        "工作记录",
-        "成果或现场佐证",
-        "复盘说明"
-      ],
-      "assignee": "张三",
-      "creatorId": 1,
-      "progress": 0,
-      "status": "todo",
-      "createdAt": "2026-08-20"
-    },
-    {
-      "id": 110,
-      "title": "准备传动试验配合",
-      "description": "协调瓦斯继电器传动试验时间，安排在检修当天下午2点，提前准备相关人员和仪器。",
-      "priority": "P2",
-      "dueDate": "2026-08-23",
-      "standard": "传动试验时间已协调确定，参与人员和设备安排到位。",
-      "method": "联系继保人员、运维人员和调度，确定试验窗口和配合事项。",
-      "points": 75,
-      "workCategory": "meeting",
-      "projectName": "会议行动项",
-      "source": "会议导入",
-      "startTime": "16:00",
-      "endTime": "17:00",
-      "selected": true,
-      "assigneeId": 1,
-      "skillIds": [
-        "COOP-01",
-        "SAFE-01"
-      ],
-      "riskPoints": [
-        "作业前确认任务边界和安全条件",
-        "出现异常立即停止并报告"
-      ],
-      "evidenceRequired": [
-        "工作记录",
-        "成果或现场佐证",
-        "复盘说明"
-      ],
-      "assignee": "张三",
-      "creatorId": 1,
-      "progress": 0,
-      "status": "todo",
-      "createdAt": "2026-08-20"
-    },
-    {
-      "id": 111,
-      "title": "整理检修方案并向师傅汇报",
-      "description": "综合梳理检修范围、安措、工器具、时间安排和风险分析，整理成完整检修方案，并向师傅汇报请示。",
-      "priority": "P1",
-      "dueDate": "2026-08-23",
-      "standard": "方案包含检修任务、人员分工、安全措施、时间节点，并获得师傅确认。",
-      "method": "汇总会议内容和各项准备情况，形成文档后汇报。",
-      "points": 80,
-      "workCategory": "meeting",
-      "projectName": "会议行动项",
-      "source": "会议导入",
-      "startTime": "17:00",
-      "endTime": "18:00",
-      "selected": true,
-      "assigneeId": 1,
-      "skillIds": [
-        "COOP-01",
-        "SAFE-01"
-      ],
-      "riskPoints": [
-        "作业前确认任务边界和安全条件",
-        "出现异常立即停止并报告"
-      ],
-      "evidenceRequired": [
-        "工作记录",
-        "成果或现场佐证",
-        "复盘说明"
-      ],
-      "assignee": "张三",
-      "creatorId": 1,
-      "progress": 0,
-      "status": "todo",
-      "createdAt": "2026-08-20"
-    }
-  ],
-  "workLogs": [],
-  "milestones": [
-    {
-      "id": 301,
-      "userId": 1,
-      "date": "2026-08-12",
-      "title": "第一阶段制度学习完成",
-      "description": "考核通过，导师评价：学习态度积极，继续保持。",
-      "type": "学习里程碑"
-    },
-    {
-      "id": 302,
-      "userId": 1,
-      "date": "2026-08-16",
-      "title": "首次独立完成设备巡视",
-      "description": "巡视记录规范，无遗漏点位。",
-      "type": "实操里程碑"
-    }
-  ],
-  "messages": [
-    {
-      "id": 1,
-      "fromId": 1,
-      "toId": 3,
-      "from": "张三",
-      "content": "今天辛苦了，注意休息。",
-      "time": "2026/8/20 16:12:19"
-    },
-    {
-      "id": 2,
-      "fromId": 3,
-      "toId": 1,
-      "from": "李四",
-      "content": "任务进展如何？有困难及时沟通。",
-      "time": "2026/8/20 16:16:45"
-    }
-  ],
-  "emotions": [
-    {
-      "id": 1,
-      "userId": 1,
-      "date": "2026-08-20",
-      "mood": "焦虑"
-    }
-  ],
-  "praise": [
-    {
-      "id": 1,
-      "from": "李四",
-      "toId": 1,
-      "content": "666",
-      "style": "薪火橙",
-      "date": "2026-08-20"
-    }
-  ],
-  "moduleConfig": {},
-  "drafts": [],
-  "gratitude": [],
-  "careActions": [
-    {
-      "id": 1,
-      "userId": 1,
-      "type": "health",
-      "value": "需要关注",
-      "date": "2026-08-20",
-      "createdAt": "2026-08-20T08:11:48.817Z"
     }
   ],
   "skillCatalog": [
@@ -577,7 +181,7 @@
       "evidenceCount": 4,
       "assessorId": 3,
       "comment": "可在指导下独立完成常规巡视，异常判断仍需加强。",
-      "date": "2026-08-19"
+      "date": "2026-08-20"
     },
     {
       "id": 802,
@@ -587,7 +191,7 @@
       "evidenceCount": 3,
       "assessorId": 3,
       "comment": "能识别常见风险，复杂场景控制措施需补充。",
-      "date": "2026-08-19"
+      "date": "2026-08-20"
     },
     {
       "id": 803,
@@ -597,7 +201,7 @@
       "evidenceCount": 5,
       "assessorId": 3,
       "comment": "记录规范，具备较好的数字化留痕习惯。",
-      "date": "2026-08-19"
+      "date": "2026-08-20"
     },
     {
       "id": 804,
@@ -607,7 +211,7 @@
       "evidenceCount": 2,
       "assessorId": 3,
       "comment": "掌握基础核对流程，需要增加现场练习。",
-      "date": "2026-08-19"
+      "date": "2026-08-20"
     },
     {
       "id": 805,
@@ -617,39 +221,6 @@
       "evidenceCount": 2,
       "assessorId": 3,
       "comment": "基础风险意识良好。",
-      "date": "2026-08-19"
-    },
-    {
-      "id": 806,
-      "userId": 1,
-      "skillId": "SAFE-01",
-      "level": 3,
-      "evidenceCount": 1,
-      "evidenceSource": "completed_tasks",
-      "assessorId": 3,
-      "comment": "能识别常见风险，复杂场景控制措施需补充。",
-      "date": "2026-08-20"
-    },
-    {
-      "id": 807,
-      "userId": 1,
-      "skillId": "SAFE-01",
-      "level": 1,
-      "evidenceCount": 1,
-      "evidenceSource": "completed_tasks",
-      "assessorId": 3,
-      "comment": "能识别常见风险，复杂场景控制措施需补充。",
-      "date": "2026-08-20"
-    },
-    {
-      "id": 808,
-      "userId": 1,
-      "skillId": "OPS-01",
-      "level": 3,
-      "evidenceCount": 0,
-      "evidenceSource": "completed_tasks",
-      "assessorId": 3,
-      "comment": "可在指导下独立完成常规巡视，异常判断仍需加强。",
       "date": "2026-08-20"
     }
   ],
@@ -708,14 +279,87 @@
       "id": 1001,
       "userId": 1,
       "mentorId": 3,
-      "week": "2026-08-19",
+      "week": "2026-08-20",
       "achievements": "完成12个巡视点位并闭环1项标识问题。",
       "blockers": "复杂异常现象判断经验不足。",
       "supportNeeded": "希望师傅结合历史案例讲解异常声响判断。",
       "nextFocus": "强化风险辨识与异常报告。",
       "mentorComment": "下周安排一次典型异常案例推演。",
       "status": "reviewed",
-      "createdAt": "2026-08-19"
+      "createdAt": "2026-08-20"
+    }
+  ],
+  "workLogs": [
+    {
+      "id": 201,
+      "userId": 1,
+      "date": "2026-08-20",
+      "hours": 2.5,
+      "content": "完成变电站一次设备巡视，核查12个点位，发现并闭环1项标识问题。",
+      "result": "12个点位完成，1项问题闭环",
+      "tags": [
+        "巡视",
+        "安全"
+      ]
+    },
+    {
+      "id": 202,
+      "userId": 1,
+      "date": "2026-08-20",
+      "hours": 1.5,
+      "content": "学习安全规程第二章，整理作业前风险辨识清单。",
+      "result": "形成8项风险清单",
+      "tags": [
+        "学习",
+        "安全规程"
+      ]
+    }
+  ],
+  "milestones": [
+    {
+      "id": 301,
+      "userId": 1,
+      "date": "2026-08-12",
+      "title": "第一阶段制度学习完成",
+      "description": "考核通过，导师评价：学习态度积极，继续保持。",
+      "type": "学习里程碑"
+    },
+    {
+      "id": 302,
+      "userId": 1,
+      "date": "2026-08-16",
+      "title": "首次独立完成设备巡视",
+      "description": "巡视记录规范，无遗漏点位。",
+      "type": "实操里程碑"
+    }
+  ],
+  "messages": [
+    {
+      "id": 401,
+      "fromId": 3,
+      "toId": 1,
+      "from": "李四",
+      "content": "今天辛苦了，记得提交培训心得哦。",
+      "time": "2026-08-20 09:20",
+      "createdAt": "2026-08-20T09:20:00+08:00",
+      "readBy": [
+        3
+      ],
+      "generatedTasks": []
+    },
+    {
+      "id": 402,
+      "fromId": 1,
+      "toId": 3,
+      "from": "张三",
+      "content": "收到师傅，巡视结束后马上整理。",
+      "time": "2026-08-20 09:25",
+      "createdAt": "2026-08-20T09:25:00+08:00",
+      "readBy": [
+        1,
+        3
+      ],
+      "generatedTasks": []
     }
   ],
   "mentorNotes": [
@@ -725,7 +369,7 @@
       "toId": 1,
       "content": "巡视前先核对风险预控卡，遇到不确定的异常现象先停、再报、后处置。",
       "tone": "safety",
-      "date": "2026-08-19"
+      "date": "2026-08-20"
     },
     {
       "id": 452,
@@ -733,10 +377,40 @@
       "toId": 2,
       "content": "定值核验要把版本号和校验码同时留痕，完成后找我做一次双人复核。",
       "tone": "focus",
-      "date": "2026-08-19"
+      "date": "2026-08-20"
     }
   ],
   "taskLikes": [],
-  "meetingMinutes": [],
-  "resetCodes": {}
+  "emotions": [
+    {
+      "id": 501,
+      "userId": 1,
+      "date": "2026-08-20",
+      "mood": "开心"
+    }
+  ],
+  "praise": [
+    {
+      "id": 601,
+      "fromId": 3,
+      "from": "李四",
+      "toId": 1,
+      "to": "张三",
+      "content": "主动帮助同事排查问题，表现优秀。",
+      "style": "薪火橙",
+      "date": "2026-08-20"
+    }
+  ],
+  "gratitude": [
+    {
+      "id": 701,
+      "from": "张三",
+      "to": "李四",
+      "content": "感谢师傅耐心讲解设备巡视的风险点。",
+      "date": "2026-08-20"
+    }
+  ],
+  "careActions": [],
+  "moduleConfig": {},
+  "drafts": []
 }

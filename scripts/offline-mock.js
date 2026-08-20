@@ -7,7 +7,7 @@
   ]
   const initial = {
     tasks: [{ id: 101, title: '完成220kV设备巡视记录', description: '按巡视规范完成一次设备检查并上传记录', priority: 'P1', workCategory: 'project', projectName: '220kV变电站运维提升项目', startTime: '09:00', endTime: '10:30', assigneeId: 1, assignee: '张三', creatorId: 3, source: '导师任务', status: 'doing', progress: 65, dueDate: today, standard: '巡视点位完整，异常项附照片', points: 80, method: '四象限法', skillIds: ['OPS-01','SAFE-01'], riskPoints: ['设备带电区域保持安全距离','发现异常不得擅自处置'], evidenceRequired: ['巡视记录','异常点照片'], createdAt: today },{ id:102,title:'安全工器具检查与台账更新',description:'完成外观检查、有效期核对与台账更新',priority:'P2',workCategory:'daily',projectName:'日常工作',startTime:'14:00',endTime:'15:00',assigneeId:1,assignee:'张三',creatorId:3,source:'导师任务',status:'done',progress:100,dueDate:today,standard:'账物一致并留痕',points:60,method:'PDCA',skillIds:['SAFE-01','DATA-01'],riskPoints:['检查前确认停用状态'],evidenceRequired:['检查清单'],createdAt:today,completedAt:today}],
-    logs: [{ id: 201, userId: 1, date: today, hours: 2.5, content: '完成变电站一次设备巡视，核查12个点位。', result: '12个点位完成，1项问题闭环', tags: ['巡视', '安全'] }],
+    logs: [],
     milestones: [{ id: 301, userId: 1, date: today, title: '首次独立完成设备巡视', description: '巡视记录规范，无遗漏点位。', type: '实操里程碑' }],
     messages: [{ id: 401, fromId: 3, toId: 1, from: '李四', content: '今天辛苦了，记得及时整理巡视记录。', time: today + ' 09:20' }, { id: 402, fromId: 1, toId: 3, from: '张三', content: '收到师傅，正在整理。', time: today + ' 09:25' }],
     praise: [{ id: 601, from: '李四', toId: 1, content: '设备巡视认真细致，值得肯定。', style: '薪火橙', date: today }], notes:[{id:451,mentorId:3,toId:1,content:'巡视前先核对风险预控卡，遇到异常先停、再报、后处置。',tone:'safety',date:today}],likes:[], actions: [], emotions: [],
@@ -74,6 +74,151 @@
       .replace(/\r/g, '')
       .replace(/\n{3,}/g, '\n\n')
       .trim()
+  }
+  const pointByPriority = { P1: 80, P2: 50 }
+  const aiKey = () => String(window.__XINHUO_OFFLINE_AI_KEY__ || localStorage.getItem('xinhuo_offline_ai_key') || '').trim()
+  function detectSource(text = '') {
+    if (/会议|例会|晨会|议题|参会|纪要|主持|发言/.test(text)) return { sourceType: 'meeting', sourceConfidence: 92, sourceReason: '识别到会议语义和行动项表达' }
+    if (/项目|专项|改造|建设|里程碑|交付|验收/.test(text)) return { sourceType: 'project', sourceConfidence: 88, sourceReason: '识别到项目目标、交付或里程碑语义' }
+    return { sourceType: 'daily', sourceConfidence: 76, sourceReason: '内容更符合日常工作或临时事项特征' }
+  }
+  function fallbackTasks(text) {
+    const sentences = String(text || '').split(/[。；;\n]/).map((item) => item.trim()).filter(Boolean).slice(0, 6)
+    const items = sentences.length ? [...sentences] : ['核对输入内容并形成执行清单']
+    const defaults = ['确认任务范围、责任人与完成标准', '执行任务并记录关键过程和异常', '复核成果、反馈结果并完成归档']
+    while (items.length < 3) items.push(defaults[items.length])
+    return items.map((item, index) => ({
+      title: item.length > 24 ? `${item.slice(0, 24)}…` : item,
+      description: item,
+      priority: index === 0 ? 'P1' : 'P2',
+      dueDate: new Date(Date.now() + (index + 1) * 86400000).toISOString().slice(0, 10),
+      standard: '结果可核验、过程有记录、异常有说明',
+      method: '四象限法',
+      points: index === 0 ? 80 : 50
+    }))
+  }
+  async function askDeepSeek(system, prompt, json = false) {
+    const key = aiKey()
+    if (!key) throw new Error('未配置 DeepSeek API 密钥')
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 45000)
+    try {
+      const response = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model: 'deepseek-v4-flash',
+          temperature: 0.25,
+          response_format: json ? { type: 'json_object' } : undefined,
+          messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }]
+        }),
+        signal: controller.signal
+      })
+      if (!response.ok) {
+        const reasons = { 401: 'DeepSeek 密钥无效或已失效', 402: 'DeepSeek 账户额度不足', 429: 'DeepSeek 请求频率超限', 500: 'DeepSeek 服务暂时异常', 503: 'DeepSeek 服务繁忙' }
+        throw new Error(reasons[response.status] || `DeepSeek 服务返回 ${response.status}`)
+      }
+      const data = await response.json()
+      return data.choices?.[0]?.message?.content || ''
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  async function splitWithAI(text, methods = ['WBS']) {
+    try {
+      const selectedMethods = methods.length ? methods.join('、') : 'WBS'
+      const content = await askDeepSeek(
+        `你是供电局任务管理助手。先把材料来源识别为meeting、project或daily，再拆分用户提供的工作内容，不编造人员或制度。使用用户选择的方法：${selectedMethods}。输出JSON对象，包含sourceType、sourceConfidence(0-100)、sourceReason和tasks。tasks为3到10个任务，每项包含title、description、priority(P1或P2，P1为重要优先、P2为常规执行)、dueDate(YYYY-MM-DD)、standard、method、points；method必须说明实际采用的方法，points按任务难度建议50到80积分。`,
+        `科学拆解方法：${selectedMethods}\n待拆解内容：\n${text}`,
+        true
+      )
+      const parsed = JSON.parse(content)
+      const tasks = Array.isArray(parsed.tasks) ? parsed.tasks.slice(0, 10) : []
+      while (tasks.length < 3) {
+        tasks.push({
+          title: tasks.length === 0 ? '确认任务范围与完成标准' : tasks.length === 1 ? '执行任务并记录过程' : '复核成果并完成归档',
+          description: tasks.length === 0 ? '核对任务目标、负责人、期限及验收口径。' : tasks.length === 1 ? '按确认后的步骤执行，记录关键数据与异常。' : '依据完成标准检查结果，提交导师复核并归档。',
+          priority: tasks.length === 0 ? 'P1' : 'P2',
+          dueDate: new Date(Date.now() + (tasks.length + 1) * 86400000).toISOString().slice(0, 10),
+          standard: '信息完整、结果可核验、过程有留痕',
+          method: 'WBS',
+          points: tasks.length === 0 ? 80 : 50
+        })
+      }
+      const normalized = tasks.map((task, index) => ({
+        title: task.title || `任务步骤${index + 1}`,
+        description: task.description || task.title || '按要求完成任务步骤',
+        priority: ['P1', 'P2'].includes(task.priority) ? task.priority : 'P2',
+        dueDate: /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate || '') ? task.dueDate : new Date(Date.now() + (index + 1) * 86400000).toISOString().slice(0, 10),
+        standard: task.standard || '结果可核验、过程有记录、异常有说明',
+        method: task.method || 'WBS',
+        points: Number(task.points) || pointByPriority[task.priority] || 50
+      }))
+      const detected = detectSource(text)
+      const sourceType = ['meeting', 'project', 'daily'].includes(parsed.sourceType) ? parsed.sourceType : detected.sourceType
+      return { tasks: normalized, ai: true, sourceType, sourceConfidence: Number(parsed.sourceConfidence) || detected.sourceConfidence, sourceReason: parsed.sourceReason || detected.sourceReason }
+    } catch (error) {
+      return { tasks: fallbackTasks(text), ai: false, ...detectSource(text), warning: `AI暂不可用，已采用规则拆分：${error.message}` }
+    }
+  }
+  async function generateMeetingMinutesWithAI(text) {
+    try {
+      const content = await askDeepSeek(
+        '你是供电局会议纪要助手。根据用户提供的会议材料或录音转录文本，生成结构化会议纪要。输出JSON对象，包含：title、date（YYYY-MM-DD）、location、attendees（数组）、agenda（数组，每项含topic、discussion、actionItems[action,owner,dueDate]）、decisions（数组）、nextMeeting。严格基于输入文本，不编造人员或制度。',
+        `请根据以下内容生成结构化会议纪要：\n${text}`,
+        true
+      )
+      const parsed = JSON.parse(content)
+      return {
+        minutes: {
+          title: parsed.title || '工作会议',
+          date: /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) ? parsed.date : new Date().toISOString().slice(0, 10),
+          location: parsed.location || '',
+          attendees: Array.isArray(parsed.attendees) ? parsed.attendees : [],
+          agenda: Array.isArray(parsed.agenda) ? parsed.agenda.map((item) => ({
+            topic: item.topic || '议题',
+            discussion: item.discussion || '',
+            actionItems: Array.isArray(item.actionItems) ? item.actionItems.map((a) => ({
+              task: a.task || a.action || '',
+              owner: a.owner || '',
+              dueDate: /^\d{4}-\d{2}-\d{2}$/.test(a.dueDate || '') ? a.dueDate : ''
+            })) : []
+          })) : [],
+          decisions: Array.isArray(parsed.decisions) ? parsed.decisions : [],
+          nextMeeting: parsed.nextMeeting || ''
+        },
+        ai: true
+      }
+    } catch (error) {
+      return {
+        minutes: {
+          title: '工作会议',
+          date: new Date().toISOString().slice(0, 10),
+          location: '',
+          attendees: [],
+          agenda: [{ topic: '会议内容', discussion: String(text || '').slice(0, 800), actionItems: [] }],
+          decisions: [],
+          nextMeeting: '',
+          rawText: text
+        },
+        ai: false,
+        warning: `AI暂不可用，已生成基础纪要框架：${error.message}`
+      }
+    }
+  }
+  async function generateReportWithAI(logs, type) {
+    const source = logs.map((l) => `${l.date}｜${l.hours}小时｜${l.content}｜成果：${l.result}`).join('\n')
+    try {
+      const content = await askDeepSeek('你是供电局员工工作材料助手。只基于输入事实生成中文材料，保留量化成果，不虚构数据。使用清晰的Markdown结构。', `生成${type}：\n${source}`)
+      return { content, ai: true }
+    } catch (error) {
+      const total = logs.reduce((sum, l) => sum + Number(l.hours || 0), 0)
+      return {
+        content: `# ${type}\n\n## 工作概况\n本周期共记录 ${logs.length} 项工作，投入 ${total} 小时。\n\n## 主要成果\n${logs.map((l) => `- ${l.content} 成果：${l.result}`).join('\n')}\n\n## 后续计划\n- 持续跟踪未闭环事项，按标准完成复核。`,
+        ai: false,
+        warning: `AI暂不可用，已采用规则生成：${error.message}`
+      }
+    }
   }
   function columnLetters(index) {
     let value = ''
@@ -142,7 +287,7 @@
   }
   async function route(method, rawUrl, body) {
     const url = String(rawUrl).replace(/^.*\/api/, '/api').split('?')[0]
-    if (url === '/api/health') return result({ status: 'ok', aiConfigured: true, offline: true })
+    if (url === '/api/health') return result({ status: 'ok', aiConfigured: Boolean(aiKey()), offline: true })
     if (url === '/api/auth/login') { const user = users.find(u => [u.username, u.name, u.employeeNo].includes(body.username) && u.role === body.role); return user ? result({ token: 'offline-token', user }, '登录成功') : { status: 401, body: { code: 401, message: '账号或角色不匹配' } } }
     const visible = current().role === 'mentor' ? db.tasks : db.tasks.filter(t => t.assigneeId === current().id)
     if (url === '/api/dashboard') { const calendarStart=new Date();calendarStart.setHours(12,0,0,0);calendarStart.setDate(calendarStart.getDate()-((calendarStart.getDay()+6)%7)-14);const workload=Array.from({length:35},(_,i)=>{const d=new Date(calendarStart.getTime()+i*86400000).toISOString().slice(0,10),list=visible.filter(t=>t.dueDate===d||t.createdAt===d||t.completedAt===d),score=list.reduce((s,t)=>s+({P1:3,P2:2}[t.priority]||1),0);return{date:d,taskCount:list.length,workload:score,level:Math.min(4,Math.ceil(score/2))}}),likePoints=db.likes.reduce((s,x)=>s+x.points,0),weeklyPoints=visible.filter(t=>t.status==='done').reduce((s,t)=>s+(t.points||50),0)+likePoints,pendingPoints=visible.filter(t=>t.status!=='done').reduce((s,t)=>s+Math.max(0,(t.points||50)-Math.round((t.points||50)*t.progress/100)),0);return result({ tasks: visible, stats: { total: visible.length, completed: visible.filter(t => t.status === 'done').length, progress: visible.length ? Math.round(visible.reduce((s, t) => s + t.progress, 0) / visible.length) : 0, due: visible.filter(t => t.dueDate <= today && t.status !== 'done').length,points:visible.reduce((s,t)=>s+Math.round((t.points||50)*t.progress/100),0)+likePoints,weeklyPoints,pendingPoints,likes:db.likes.length },workload,notes:db.notes.filter(n=>current().role==='mentor'||n.toId===current().id),likes:db.likes, users, milestones: db.milestones }) }
@@ -155,11 +300,51 @@
     match = url.match(/^\/api\/tasks\/(\d+)\/like$/); if (match) { const t=db.tasks.find(x=>x.id===Number(match[1]));if(db.likes.some(x=>x.taskId===t.id))return{status:409,body:{code:409,message:'该任务已经点赞'}};const like={id:Date.now(),taskId:t.id,taskTitle:t.title,fromId:3,from:'李四',toId:t.assigneeId,comment:body.comment,points:body.points||10,date:today};db.likes.push(like);save();return result(like) }
     if (url === '/api/desensitize') return result({ text: String(body.text || '').replace(/1\d{10}/g, '138****0000') })
     if (url === '/api/file/upload') return result(await extractOfflineFile(body.file))
-    if (url === '/api/task/split') { const raw=String(body.text||''),sourceType=/会议|例会|纪要/.test(raw)?'meeting':/项目|专项|验收/.test(raw)?'project':'daily';const rows = raw.split(/[。；;\n]/).filter(x => x.trim()).slice(0, 6);const items=rows.length?[...rows]:['整理材料并确认行动项'];['确认范围与完成标准','执行任务并记录过程','复核成果并归档'].forEach(x=>{if(items.length<3)items.push(x)}); return result({ sourceType,sourceConfidence:88,sourceReason:'根据材料中的业务关键词自动识别',tasks: items.map((x, i) => ({ title: x.trim(), description: '根据源材料生成的离线演示任务', priority: i ? 'P2' : 'P1', dueDate: today, standard: '按时完成并提交可核验成果', method: (body.methods || ['WBS']).join(' + '),points:i?50:80 })), warning: '离线展示版使用本地规则模拟AI结果' }) }
+    if (url === '/api/task/split') return result(await splitWithAI(String(body.text || ''), body.methods || ['WBS']))
+    if (url === '/api/meeting-minutes/generate') return result(await generateMeetingMinutesWithAI(String(body.text || '')))
+    if (url === '/api/meeting-minutes/save') {
+      const item = { id: Date.now(), ...(body.minutes || {}), savedAt: new Date().toISOString() }
+      db.meetingMinutes ||= []
+      db.meetingMinutes.unshift(item)
+      save()
+      return result(item, '会议纪要已保存')
+    }
+    if (url === '/api/meeting-minutes') return result((db.meetingMinutes || []).slice())
+    if (url === '/api/meeting-minutes/export') {
+      const minutes = body.minutes || {}
+      const text = [
+        `会议名称：${minutes.title || '工作会议'}`,
+        `会议日期：${minutes.date || today}`,
+        `会议地点：${minutes.location || ''}`,
+        `参会人员：${Array.isArray(minutes.attendees) ? minutes.attendees.join('、') : ''}`,
+        '',
+        ...(Array.isArray(minutes.agenda) ? minutes.agenda.flatMap((item, index) => [
+          `${index + 1}. ${item.topic || '议题'}`,
+          `${item.discussion || ''}`,
+          ...(Array.isArray(item.actionItems) ? item.actionItems.map((action) => `- ${action.task || ''}｜责任人：${action.owner || '待定'}｜期限：${action.dueDate || '待定'}`) : []),
+          ''
+        ]) : []),
+        '决议事项：',
+        ...(Array.isArray(minutes.decisions) ? minutes.decisions.map((d) => `- ${d}`) : []),
+        '',
+        `下次会议：${minutes.nextMeeting || ''}`
+      ].join('\n').trim()
+      return { blob: new Blob([text], { type: body.format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }) }
+    }
     if (url === '/api/work-logs' && method === 'GET') return result(db.logs.filter(x => x.userId === current().id || current().role === 'mentor'))
     if (url === '/api/work-logs' && method === 'POST') { db.logs.push({ id: Date.now(), userId: current().id, ...body }); save(); return result(body) }
     match = url.match(/^\/api\/work-logs\/(\d+)$/); if (match && method === 'DELETE') { db.logs = db.logs.filter(x => x.id !== Number(match[1])); save(); return result(true) }
-    if (url === '/api/reports/generate') return result({ content: `【${body.type}】\n一、工作完成情况\n完成设备巡视及相关记录整理。\n\n二、工作成效\n任务过程留痕完整，重点事项按计划推进。\n\n三、下一步计划\n持续强化风险辨识和成果复盘。`,sourceStats:{tasks:visible.length,logs:db.logs.length},range:{start:body.start,end:body.end},warning: '离线展示版使用本地模板生成' })
+    if (url === '/api/reports/generate') {
+      const logs = db.logs.filter(x => x.userId === current().id || current().role === 'mentor')
+      const facts = [...logs, ...visible.map((task) => ({
+        date: task.completedAt || task.dueDate || today,
+        hours: task.startTime && task.endTime ? Math.max(0.5, Number(task.endTime.slice(0, 2)) - Number(task.startTime.slice(0, 2))) : 1,
+        content: `[任务·${task.status === 'done' ? '已完成' : `进度${task.progress}%`}] ${task.title}`,
+        result: task.status === 'done' ? (task.mentorComment || task.standard) : `当前进度 ${task.progress}%`
+      }))]
+      const report = await generateReportWithAI(facts, body.type || '周报')
+      return result({ ...report, sourceStats: { tasks: visible.length, logs: logs.length }, range: { start: body.start, end: body.end } })
+    }
     if (url === '/api/reports/export' || url === '/api/pdf/merge') return { blob: new Blob([body.content || '离线展示导出文件'], { type: 'application/octet-stream' }) }
     if (url === '/api/growth') {const taskPoints=visible.reduce((s,t)=>s+Math.round((t.points||50)*t.progress/100),0),bonusPoints=db.likes.filter(x=>x.toId===current().id).reduce((s,x)=>s+x.points,0),points=taskPoints+bonusPoints;return result({ points,taskPoints,bonusPoints, rank: points>=300?'太阳':points>=100?'月亮':'星星', next: points>=300?600:points>=100?300:100, percent:Math.min(100,Math.round(points/(points>=300?600:points>=100?300:100)*100)), weights: { schedule: 40, meeting: 25, practice: 20, supplement: 15 }, milestones: db.milestones, tasks: visible,likes:db.likes.filter(x=>x.toId===current().id) })}
     if (url === '/api/capabilities') { const queryId=Number(String(rawUrl).match(/userId=(\d+)/)?.[1]||current().id); const snapshot=(userId)=>{const person=users.find(u=>u.id===userId);const skills=db.skills.map(skill=>{const a=[...db.assessments].reverse().find(x=>x.userId===userId&&x.skillId===skill.id),related=db.tasks.filter(t=>t.assigneeId===userId&&t.skillIds?.includes(skill.id)),completed=related.filter(t=>t.status==='done'),evidenceSources=completed.map(t=>({taskId:t.id,title:t.title,completedAt:t.completedAt||t.dueDate,items:t.evidenceRequired||['工作记录']}));const level=a?.level||1;return{...skill,level,levelName:['未接触','观察学习','协助完成','独立完成','能够带教'][level-1],gap:Math.max(0,skill.targetLevel-level),evidenceCount:evidenceSources.length,evidenceSources,assessment:a,relatedTaskCount:related.length,completedTaskCount:completed.length}});return{user:person,skills,gaps:skills.filter(s=>s.gap>0),readiness:Math.round(skills.reduce((n,s)=>n+Math.min(1,s.level/s.targetLevel),0)/skills.length*100)}};const snap=snapshot(queryId);return result({...snap,heatmap:current().role==='mentor'?users.filter(u=>u.role==='apprentice').map(u=>snapshot(u.id)):[],safetyCases:db.safetyCases,reviews:db.reviews.filter(x=>x.userId===queryId),levelNames:['未接触','观察学习','协助完成','独立完成','能够带教']}) }

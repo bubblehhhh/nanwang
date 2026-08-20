@@ -41,6 +41,64 @@ const ok = (res, data, message = '操作成功') => res.json({ code: 0, message,
 const fail = (res, status, message) => res.status(status).json({ code: status, message, data: null, requestId: crypto.randomUUID() })
 const nextId = (list) => Math.max(0, ...list.map((item) => Number(item.id))) + 1
 const taskKey = (task) => `${Number(task.assigneeId)}::${String(task.title || '').trim().replace(/\s+/g, '').toLowerCase()}`
+const today = () => new Date().toISOString().slice(0, 10)
+const inferChatTaskDefaults = (content = '') => {
+  const priority = /紧急|马上|立即|尽快|今天内|今晚/.test(content) ? 'P0' : /重要|优先|本周内/.test(content) ? 'P1' : 'P2'
+  const workCategory = /会议|纪要|例会|晨会/.test(content) ? 'meeting' : /项目|专项|改造|建设|验收/.test(content) ? 'project' : 'daily'
+  const projectName = workCategory === 'meeting' ? '聊天布置·会议任务' : workCategory === 'project' ? '聊天布置·项目工作' : '聊天布置·日常安排'
+  return { priority, workCategory, projectName }
+}
+const parseDateText = (content = '') => {
+  const explicit = content.match(/(20\d{2})[-/.年](\d{1,2})[-/.月](\d{1,2})/)
+  if (explicit) return `${explicit[1]}-${String(explicit[2]).padStart(2, '0')}-${String(explicit[3]).padStart(2, '0')}`
+  if (/今天/.test(content)) return today()
+  const base = new Date()
+  if (/明天/.test(content)) { base.setDate(base.getDate() + 1); return base.toISOString().slice(0, 10) }
+  if (/后天/.test(content)) { base.setDate(base.getDate() + 2); return base.toISOString().slice(0, 10) }
+  if (/本周/.test(content)) { return today() }
+  return today()
+}
+const parseTimeText = (content = '') => {
+  const timeMatch = content.match(/(?:上午|下午|晚上)?\s*(\d{1,2})[:：点](\d{1,2})?/)
+  if (!timeMatch) return { startTime: '', endTime: '' }
+  let hour = Number(timeMatch[1]); const minute = Number(timeMatch[2] || 0)
+  if (/下午|晚上/.test(timeMatch[0]) && hour < 12) hour += 12
+  const startTime = `${String(Math.min(hour, 23)).padStart(2, '0')}:${String(Math.min(minute, 59)).padStart(2, '0')}`
+  const endHour = Math.min(hour + 1, 23)
+  return { startTime, endTime: `${String(endHour).padStart(2, '0')}:${String(Math.min(minute, 59)).padStart(2, '0')}` }
+}
+const extractChatTasks = (content = '', assigneeId, assignee, creatorId) => {
+  const lines = content.split(/\n|；|;/).map(item => item.trim()).filter(Boolean)
+  const taskLines = lines.filter(line => /请|需要|安排|完成|提交|整理|跟进|核对|学习|处理|检查|编写|输出/.test(line))
+  const candidates = (taskLines.length ? taskLines : [content]).slice(0, 5)
+  return candidates.map((line, index) => {
+    const cleanTitle = line
+      .replace(/^(请|需要|安排你|安排|麻烦你|记得|今天|明天|后天|本周|尽快|务必)\s*/g, '')
+      .replace(/[。！!]+$/g, '')
+      .slice(0, 40) || `聊天任务 ${index + 1}`
+    const base = inferChatTaskDefaults(line)
+    const { startTime, endTime } = parseTimeText(line)
+    const dueDate = parseDateText(line)
+    return {
+      title: cleanTitle,
+      description: `来源于师徒聊天布置：${line}`,
+      standard: '按聊天要求完成，并在任务中心提交执行结果',
+      method: '聊天指令识别',
+      source: '聊天布置',
+      assigneeId,
+      assignee,
+      creatorId,
+      dueDate,
+      startTime,
+      endTime,
+      points: base.priority === 'P0' ? 100 : base.priority === 'P1' ? 80 : 60,
+      skillIds: ['COOP-01', 'DATA-01'],
+      riskPoints: base.priority === 'P0' || base.priority === 'P1' ? ['执行前确认任务边界与安全条件', '存在现场风险时先沟通再处理'] : [],
+      evidenceRequired: ['聊天布置记录', '工作记录', '完成说明'],
+      ...base
+    }
+  })
+}
 
 function auth(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '')
@@ -65,6 +123,8 @@ const apiCatalog = [
   ['系统', 'POST', '/api/settings/ai-key', '首次保存后端AI密钥'],
   ['系统', 'PUT', '/api/settings/ai-key', '验证并更换后端AI密钥'],
   ['认证', 'POST', '/api/auth/login', '用户登录与角色校验'],
+  ['认证', 'POST', '/api/auth/send-code', '发送找回密码验证码（演示）'],
+  ['认证', 'POST', '/api/auth/reset-password', '校验验证码并重置密码'],
   ['工作台', 'GET', '/api/dashboard', '获取工作台统计、任务和人员'],
   ['工作台', 'GET', '/api/weather/hourly', '获取逐小时温度和降雨概率'],
   ['任务', 'GET', '/api/tasks', '查询当前角色可见任务'],
@@ -72,6 +132,7 @@ const apiCatalog = [
   ['任务', 'POST', '/api/tasks/bulk', '批量发布并拦截重复任务'],
   ['任务', 'PATCH', '/api/tasks/:id/progress', '任务负责人更新进度'],
   ['任务', 'POST', '/api/tasks/:id/verify', '师傅手动核销或退回任务'],
+  ['任务', 'POST', '/api/tasks/verify-bulk', '师傅勾选多项任务后一键核销'],
   ['任务', 'POST', '/api/tasks/:id/like', '师傅点赞优秀任务并奖励积分'],
   ['智能处理', 'POST', '/api/file/upload', '多模态文件上传与解析'],
   ['智能处理', 'POST', '/api/desensitize', '敏感文本脱敏'],
@@ -93,6 +154,7 @@ const apiCatalog = [
   ['关怀', 'GET', '/api/care', '查询关怀中心数据'],
   ['关怀', 'POST', '/api/care/emotion', '提交每日情绪打卡'],
   ['关怀', 'POST', '/api/care/message', '发送师徒问候'],
+  ['关怀', 'POST', '/api/care/message/read', '标记聊天消息为已读'],
   ['关怀', 'PUT', '/api/care/config', '保存关怀模块配置'],
   ['工具', 'POST', '/api/pdf/merge', '合并多个PDF文件'],
   ['工具', 'POST', '/api/pdf/extract', '按页码范围提取PDF页面'],
@@ -163,6 +225,38 @@ app.post('/api/auth/login', (req, res) => {
   ok(res, { token, user: safeUser }, '登录成功')
 })
 
+app.post('/api/auth/send-code', (req, res) => {
+  const phone = String(req.body.phone || '').trim()
+  if (!/^1[3-9]\d{9}$/.test(phone)) return fail(res, 400, '请输入正确的手机号')
+  const db = readDb()
+  const user = db.users.find(item => item.phone === phone)
+  if (!user) return fail(res, 404, '未找到该手机号对应的账号')
+  const demoCode = String(Math.floor(100000 + Math.random() * 900000))
+  db.resetCodes ||= {}
+  db.resetCodes[phone] = { code: demoCode, expiresAt: Date.now() + 10 * 60 * 1000 }
+  writeDb(db)
+  ok(res, { demoCode, expiresIn: 600 }, '验证码已发送')
+})
+
+app.post('/api/auth/reset-password', (req, res) => {
+  const phone = String(req.body.phone || '').trim()
+  const code = String(req.body.code || '').trim()
+  const newPassword = String(req.body.newPassword || '')
+  if (!/^1[3-9]\d{9}$/.test(phone)) return fail(res, 400, '请输入正确的手机号')
+  if (!/^\d{6}$/.test(code)) return fail(res, 400, '请输入6位验证码')
+  if (newPassword.length < 8 || !/[^A-Za-z0-9]/.test(newPassword)) return fail(res, 400, '新密码至少8位且需包含特殊字符')
+  const db = readDb()
+  const user = db.users.find(item => item.phone === phone)
+  if (!user) return fail(res, 404, '未找到该手机号对应的账号')
+  const record = db.resetCodes?.[phone]
+  if (!record || Date.now() > Number(record.expiresAt)) return fail(res, 410, '验证码已失效，请重新获取')
+  if (record.code !== code) return fail(res, 400, '验证码不正确')
+  user.password = newPassword
+  delete db.resetCodes[phone]
+  writeDb(db)
+  ok(res, true, '密码重置成功')
+})
+
 app.get('/api/dashboard', auth, (req, res) => {
   const db = readDb()
   const scope = req.user.role === 'mentor' ? db.tasks.filter((t) => [1, 2].includes(t.assigneeId)) : db.tasks.filter((t) => t.assigneeId === req.user.id)
@@ -177,11 +271,12 @@ app.get('/api/dashboard', auth, (req, res) => {
   const visibleIds = req.user.role === 'mentor' ? db.users.filter(user => user.role === 'apprentice').map(user => user.id) : [req.user.id]
   const likes = db.taskLikes.filter(item => visibleIds.includes(item.toId)).sort((a, b) => b.id - a.id)
   const notes = db.mentorNotes.filter(item => req.user.role === 'mentor' ? item.mentorId === req.user.id : item.toId === req.user.id).sort((a, b) => b.id - a.id)
+  const unreadMessages = db.messages.filter(message => message.toId === req.user.id && !message.readBy?.includes(req.user.id)).length
   const monday = new Date(); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); const weekStart = monday.toISOString().slice(0, 10)
   const weeklyTaskPoints = scope.filter(task => task.status === 'done' && (task.completedAt || task.dueDate) >= weekStart).reduce((sum, task) => sum + (task.points || 50), 0)
   const weeklyLikePoints = likes.filter(item => item.date >= weekStart).reduce((sum, item) => sum + item.points, 0)
   const pendingPoints = scope.filter(task => task.status !== 'done').reduce((sum, task) => sum + Math.max(0, (task.points || 50) - Math.round((task.points || 50) * task.progress / 100)), 0)
-  ok(res, { tasks: scope, stats: { total: scope.length, completed, progress, due: scope.filter((t) => t.dueDate <= new Date().toISOString().slice(0, 10) && t.status !== 'done').length, points: scope.reduce((sum, task) => sum + Math.round((task.points || 50) * task.progress / 100), 0) + likes.reduce((sum, item) => sum + item.points, 0), weeklyPoints: weeklyTaskPoints + weeklyLikePoints, pendingPoints, likes: likes.length }, workload, notes, likes, users: db.users.map(({ password, ...u }) => u), milestones: db.milestones })
+  ok(res, { tasks: scope, stats: { total: scope.length, completed, progress, due: scope.filter((t) => t.dueDate <= today() && t.status !== 'done').length, points: scope.reduce((sum, task) => sum + Math.round((task.points || 50) * task.progress / 100), 0) + likes.reduce((sum, item) => sum + item.points, 0), weeklyPoints: weeklyTaskPoints + weeklyLikePoints, pendingPoints, likes: likes.length, unreadMessages }, workload, notes, likes, users: db.users.map(({ password, ...u }) => u), milestones: db.milestones })
 })
 
 app.get('/api/weather/hourly', auth, async (_req, res) => {
@@ -253,6 +348,29 @@ app.post('/api/tasks/:id/verify', auth, (req, res) => {
   task.status = req.body.approved ? 'done' : 'doing'; task.progress = req.body.approved ? 100 : 90; task.mentorComment = req.body.comment; task.completedAt = req.body.approved ? new Date().toISOString().slice(0, 10) : undefined
   if (req.body.approved) db.milestones.push({ id: nextId(db.milestones), userId: task.assigneeId, date: task.completedAt, title: `完成任务：${task.title}`, description: req.body.comment || task.standard, type: '任务里程碑' })
   writeDb(db); ok(res, task, req.body.approved ? '任务已核销并进入工作库' : '任务已退回')
+})
+
+app.post('/api/tasks/verify-bulk', auth, (req, res) => {
+  if (req.user.role !== 'mentor') return fail(res, 403, '只有师傅可以批量核销任务')
+  const taskIds = Array.isArray(req.body.taskIds) ? req.body.taskIds.map(id => Number(id)).filter(Boolean) : []
+  if (!taskIds.length) return fail(res, 400, '请先选择待核销任务')
+  const db = readDb()
+  const approved = []
+  const skipped = []
+  for (const taskId of taskIds) {
+    const task = db.tasks.find(item => item.id === taskId)
+    if (!task) { skipped.push({ id: taskId, reason: '任务不存在' }); continue }
+    if (task.status !== 'verify') { skipped.push({ id: taskId, title: task.title, reason: '任务当前不处于待核销状态' }); continue }
+    task.status = 'done'
+    task.progress = 100
+    task.mentorComment = String(req.body.comment || '符合完成标准，同意核销。')
+    task.completedAt = new Date().toISOString().slice(0, 10)
+    db.milestones.push({ id: nextId(db.milestones), userId: task.assigneeId, date: task.completedAt, title: `完成任务：${task.title}`, description: task.mentorComment || task.standard, type: '任务里程碑' })
+    approved.push(task)
+  }
+  if (!approved.length) return fail(res, 409, skipped[0]?.reason || '没有可核销的任务')
+  writeDb(db)
+  ok(res, { approved, skipped }, `已批量核销 ${approved.length} 项任务`)
 })
 
 app.post('/api/tasks/:id/like', auth, (req, res) => {
@@ -445,11 +563,14 @@ app.post('/api/reports/export', auth, async (req, res) => {
 app.get('/api/growth', auth, (req, res) => {
   const db = readDb(); const userId = Number(req.query.userId || req.user.id); const tasks = db.tasks.filter((t) => t.assigneeId === userId)
   const likes = db.taskLikes.filter(item => item.toId === userId)
+  const praise = (db.praise || []).filter(item => item.toId === userId)
   const taskPoints = tasks.reduce((sum, t) => sum + Math.round((t.points || 50) * t.progress / 100), 0)
   const bonusPoints = likes.reduce((sum, item) => sum + item.points, 0); const points = taskPoints + bonusPoints
   const rank = points > 600 ? '皇冠' : points >= 300 ? '太阳' : points >= 100 ? '月亮' : '星星'
   const next = points > 600 ? 800 : points >= 300 ? 600 : points >= 100 ? 300 : 100
-  ok(res, { points, taskPoints, bonusPoints, rank, next, percent: Math.min(100, Math.round(points / next * 100)), weights: { schedule: 40, meeting: 25, practice: 20, supplement: 15 }, milestones: db.milestones.filter((m) => m.userId === userId), tasks, likes })
+  const praiseMilestones = praise.map(item => ({ id: `praise-${item.id}`, userId, date: item.date, title: `收到${item.from}的表扬卡`, description: item.content, type: '表扬反馈' }))
+  const likeMilestones = likes.map(item => ({ id: `like-${item.id}`, userId, date: item.date, title: `任务获得师傅点赞：${item.taskTitle}`, description: item.comment, type: '点赞反馈' }))
+  ok(res, { points, taskPoints, bonusPoints, rank, next, percent: Math.min(100, Math.round(points / next * 100)), weights: { schedule: 40, meeting: 25, practice: 20, supplement: 15 }, milestones: [...db.milestones.filter((m) => m.userId === userId), ...praiseMilestones, ...likeMilestones].sort((a,b)=>String(a.date).localeCompare(String(b.date))), tasks, likes, praise })
 })
 
 const levelNames = ['未接触', '观察学习', '协助完成', '独立完成', '能够带教']
@@ -531,10 +652,49 @@ app.post('/api/weekly-reviews', auth, (req, res) => {
   db.weeklyReviews.push(item); writeDb(db); ok(res, item, '周复盘已提交')
 })
 
-app.get('/api/care', auth, (req, res) => { const db = readDb(); ok(res, { emotion: db.emotions.find((e) => e.userId === req.user.id && e.date === new Date().toISOString().slice(0,10)), praise: db.praise, gratitude: db.gratitude || [], messages: db.messages.filter((m) => m.fromId === req.user.id || m.toId === req.user.id), users: db.users.map(({ password, ...user }) => user), actions: (db.careActions || []).filter(item => item.userId === req.user.id), config: db.moduleConfig[req.user.id] || null }) })
+app.get('/api/care', auth, (req, res) => { const db = readDb(); ok(res, { emotion: db.emotions.find((e) => e.userId === req.user.id && e.date === today()), praise: (db.praise || []).filter(item => item.toId === req.user.id || item.fromId === req.user.id), gratitude: db.gratitude || [], messages: db.messages.filter((m) => m.fromId === req.user.id || m.toId === req.user.id), users: db.users.map(({ password, ...user }) => user), actions: (db.careActions || []).filter(item => item.userId === req.user.id), config: db.moduleConfig[req.user.id] || null, unreadCount: db.messages.filter(message => message.toId === req.user.id && !message.readBy?.includes(req.user.id)).length }) })
 app.post('/api/care/emotion', auth, (req, res) => { const db = readDb(); const date = new Date().toISOString().slice(0,10); if (db.emotions.some((e) => e.userId === req.user.id && e.date === date)) return fail(res, 409, '今天已经完成情绪打卡'); const item = { id: nextId(db.emotions), userId: req.user.id, date, mood: req.body.mood }; db.emotions.push(item); writeDb(db); ok(res, item, '感谢你的分享') })
-app.post('/api/care/message', auth, (req, res) => { const db = readDb(); const target = db.users.find((u) => u.id === Number(req.body.toId)); const content = String(req.body.content || '').trim(); if (!target) return fail(res, 400, '请选择有效的对话对象'); if (!content) return fail(res, 400, '消息内容不能为空'); if (content.length > 300) return fail(res, 400, '消息内容不能超过300字'); const item = { id: nextId(db.messages), fromId: req.user.id, toId: target.id, from: req.user.name, content, time: new Date().toLocaleString('zh-CN', { hour12: false }) }; db.messages.push(item); writeDb(db); ok(res, item, '问候已发送') })
-app.post('/api/care/praise', auth, (req, res) => { const db = readDb(); const target = db.users.find((u) => u.id === Number(req.body.toId)); const content = String(req.body.content || '').trim(); if (!target || !content) return fail(res, 400, '请选择接收人并填写表扬内容'); const item = { id: nextId(db.praise), from: req.user.name, toId: target.id, content, style: req.body.style || '薪火橙', date: new Date().toISOString().slice(0,10) }; db.praise.push(item); writeDb(db); ok(res, item, '表扬卡已发送') })
+app.post('/api/care/message', auth, (req, res) => {
+  const db = readDb()
+  const target = db.users.find((u) => u.id === Number(req.body.toId))
+  const content = String(req.body.content || '').trim()
+  if (!target) return fail(res, 400, '请选择有效的对话对象')
+  if (!content) return fail(res, 400, '消息内容不能为空')
+  if (content.length > 300) return fail(res, 400, '消息内容不能超过300字')
+  const now = new Date()
+  const item = { id: nextId(db.messages), fromId: req.user.id, toId: target.id, from: req.user.name, content, time: now.toLocaleString('zh-CN', { hour12: false }), createdAt: now.toISOString(), readBy: [req.user.id], generatedTasks: [] }
+  let generatedTasks = []
+  if (req.user.role === 'mentor' && req.body.detectTasks !== false) {
+    const candidates = extractChatTasks(content, target.id, target.name, req.user.id)
+    for (const candidate of candidates) {
+      if (db.tasks.some(existing => taskKey(existing) === taskKey(candidate))) continue
+      const task = { id: nextId(db.tasks), ...candidate, progress: 0, status: 'todo', createdAt: today() }
+      db.tasks.push(task)
+      generatedTasks.push({ id: task.id, title: task.title, dueDate: task.dueDate, startTime: task.startTime, workCategory: task.workCategory })
+    }
+  }
+  item.generatedTasks = generatedTasks
+  db.messages.push(item)
+  writeDb(db)
+  ok(res, { ...item, generatedTasks }, generatedTasks.length ? `消息已发送，并识别出 ${generatedTasks.length} 项任务` : '消息已发送')
+})
+app.post('/api/care/message/read', auth, (req, res) => {
+  const db = readDb()
+  const counterpartId = Number(req.body.counterpartId)
+  const updated = []
+  db.messages.forEach(message => {
+    if (message.toId === req.user.id && message.fromId === counterpartId) {
+      message.readBy ||= []
+      if (!message.readBy.includes(req.user.id)) {
+        message.readBy.push(req.user.id)
+        updated.push(message.id)
+      }
+    }
+  })
+  writeDb(db)
+  ok(res, { readMessageIds: updated }, updated.length ? '消息已标记为已读' : '没有新的未读消息')
+})
+app.post('/api/care/praise', auth, (req, res) => { const db = readDb(); const target = db.users.find((u) => u.id === Number(req.body.toId)); const content = String(req.body.content || '').trim(); if (!target || !content) return fail(res, 400, '请选择接收人并填写表扬内容'); db.praise ||= []; const item = { id: nextId(db.praise), fromId: req.user.id, from: req.user.name, toId: target.id, to: target.name, content, style: req.body.style || '薪火橙', date: new Date().toISOString().slice(0,10) }; db.praise.push(item); writeDb(db); ok(res, item, '表扬卡已发送') })
 app.post('/api/care/gratitude', auth, (req, res) => { const db = readDb(); const target = db.users.find(user => user.id === Number(req.body.toId)); const item = { id: nextId(db.gratitude || []), from: req.user.name, to: target?.name || '同事', content: req.body.content, date: new Date().toISOString().slice(0,10) }; db.gratitude ||= []; db.gratitude.push(item); writeDb(db); ok(res, item, '感谢卡已发送') })
 app.post('/api/care/action', auth, (req, res) => { const allowed = ['health','focus','warning-handled']; if (!allowed.includes(req.body.type)) return fail(res, 400, '不支持的关怀记录类型'); const db = readDb(); db.careActions ||= []; const item = { id: nextId(db.careActions), userId: req.user.id, type: req.body.type, value: String(req.body.value || ''), date: new Date().toISOString().slice(0,10), createdAt: new Date().toISOString() }; db.careActions.push(item); writeDb(db); ok(res, item, '关怀记录已保存') })
 app.put('/api/care/config', auth, (req, res) => { const db = readDb(); db.moduleConfig[req.user.id] = req.body; writeDb(db); ok(res, req.body, '工作台布局已保存') })
@@ -549,7 +709,7 @@ app.post('/api/pdf/extract', auth, upload.single('file'), async (req, res) => {
   const cleanup = () => req.file?.path && fs.rm(req.file.path, { force: true }, () => {})
   try {
     if (!req.file) return fail(res, 400, '请选择一个PDF文件')
-    const spec = String(req.body.spec || req.body.pages || '').trim()
+    const spec = String(req.body.spec || req.body.pages || '').trim().replace(/[，；\s]+/g, ',').replace(/–|—|－/g, '-')
     if (!spec) return fail(res, 400, '请填写页码范围，如 1-3,5,8-9')
     const source = await PDFDocument.load(fs.readFileSync(req.file.path))
     const totalPages = source.getPageCount()

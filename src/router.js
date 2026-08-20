@@ -7,7 +7,7 @@ import SmartInput from './views/SmartInputEnhanced.vue'
 import Growth from './views/GrowthEnhanced.vue'
 import WorkLibrary from './views/WorkLibraryEnhanced.vue'
 import CareCenter from './views/CareCenterEnhanced.vue'
-import Toolbox from './views/Toolbox.vue'
+import MessageCenter from './views/MessageCenter.vue'
 import CapabilityCenter from './views/CapabilityCenter.vue'
 import Profile from './views/Profile.vue'
 
@@ -20,8 +20,8 @@ const router = createRouter({ history: location.protocol === 'file:' ? createWeb
   { path: '/growth', component: Growth },
   { path: '/capabilities', component: CapabilityCenter },
   { path: '/work-library', component: WorkLibrary },
+  { path: '/messages', component: MessageCenter },
   { path: '/care', component: CareCenter },
-  { path: '/toolbox', component: Toolbox },
   { path: '/profile', component: Profile, meta: { title: '个人设置' } }
 ] })
 router.beforeEach((to) => {
