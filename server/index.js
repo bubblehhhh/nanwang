@@ -91,7 +91,7 @@ async function extractPdfText(filePath) {
     const content = await (await doc.getPage(i)).getTextContent()
     text += content.items.map((it) => it.str).join(' ') + '\n'
   }
-  await doc.destroy()
+  try { await doc.cleanup() } catch {}
   return text
 }
 
