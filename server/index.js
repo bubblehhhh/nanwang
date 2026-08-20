@@ -505,8 +505,8 @@ app.post('/api/pdf/split', auth, upload.single('file'), async (req, res) => {
     const pages = await out.copyPages(src, indices)
     pages.forEach((p) => out.addPage(p))
     const bytes = await out.save()
-    const name = req.file.originalname.replace(/\.pdf$/i, '') || 'document'
-    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}_拆分.pdf` }).send(Buffer.from(bytes))
+    const fullName = `${req.file.originalname.replace(/\.pdf$/i, '') || 'document'}_拆分.pdf`
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="split.pdf"; filename*=UTF-8''${encodeURIComponent(fullName)}` }).send(Buffer.from(bytes))
   } catch (e) { fail(res, 400, e.message) }
   finally { req.file && fs.rm(req.file.path, { force: true }, () => {}) }
 })
