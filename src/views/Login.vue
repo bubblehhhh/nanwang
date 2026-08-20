@@ -8,7 +8,7 @@ import { useAuthStore } from '../store'
 
 const router = useRouter(); const auth = useAuthStore(); const loading = ref(false)
 const form = reactive({ username: '张三', password: 'Abc@123456', role: 'apprentice' })
-const presets = { apprentice: { username: '张三', label: '张三 · 组员', relation: '师父：李四' }, mentor: { username: '李四', label: '李四 · 组长', relation: '学员：张三、赵六' } }
+const presets = { apprentice: { username: '张三', label: '张三 · 徒弟', relation: '师父：李四' }, mentor: { username: '李四', label: '李四 · 师傅', relation: '学员：张三、赵六' } }
 function switchRole(role) { form.role = role; form.username = presets[role].username; form.password = 'Abc@123456' }
 async function submit() {
   if (!form.username || form.password.length < 8 || !/[^A-Za-z0-9]/.test(form.password)) return ElMessage.warning('请输入姓名/工号，并使用至少8位且含特殊字符的密码')
@@ -32,7 +32,7 @@ async function submit() {
     <section class="login-panel">
       <div class="login-box">
         <p class="eyebrow">内部业务系统</p><h2>欢迎登录</h2><p class="muted">请选择身份，进入专属师徒工作台</p>
-        <div class="role-switch"><button :class="{active:form.role==='apprentice'}" @click="switchRole('apprentice')">组员视角</button><button :class="{active:form.role==='mentor'}" @click="switchRole('mentor')">组长视角</button></div>
+        <div class="role-switch"><button :class="{active:form.role==='apprentice'}" @click="switchRole('apprentice')">徒弟视角</button><button :class="{active:form.role==='mentor'}" @click="switchRole('mentor')">师傅视角</button></div>
         <div class="relation-strip"><el-icon><Connection /></el-icon><div><b>{{ presets[form.role].label }}</b><span>{{ presets[form.role].relation }}</span></div></div>
         <el-form @submit.prevent="submit" label-position="top">
           <el-form-item label="姓名或工号"><el-input v-model="form.username" size="large" :prefix-icon="User" placeholder="请输入姓名或工号" /></el-form-item>

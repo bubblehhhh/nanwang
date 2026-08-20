@@ -9,9 +9,9 @@ const today = new Date().toISOString().slice(0, 10)
 
 const seed = {
   users: [
-    { id: 1, username: 'zhangsan', name: '张三', employeeNo: 'PSB-2024-001', password: 'Abc@123456', role: 'apprentice', roleName: '组员', department: '广州供电局-运维检修部', position: '变电运维初级工', mentorId: 3, mentor: '李四', avatar: '张', goal: '掌握220kV变电站一次设备运维技能及事故处理流程' },
-    { id: 2, username: 'zhaoliu', name: '赵六', employeeNo: 'PSB-2024-002', password: 'Abc@123456', role: 'apprentice', roleName: '组员', department: '广州供电局-运维检修部', position: '继电保护初级工', mentorId: 3, mentor: '李四', avatar: '赵', goal: '掌握继电保护装置调试、定值整定及故障分析技能' },
-    { id: 3, username: 'lisi', name: '李四', employeeNo: 'PSB-2005-088', password: 'Abc@123456', role: 'mentor', roleName: '组长', department: '广州供电局-运维检修部', position: '变电检修高级技师', apprenticeIds: [1, 2], avatar: '李', goal: '培养新员工独立完成一次设备运维及继电保护调试基础工作' }
+    { id: 1, username: 'zhangsan', name: '张三', employeeNo: 'PSB-2024-001', password: 'Abc@123456', role: 'apprentice', roleName: '徒弟', department: '广州供电局-运维检修部', position: '变电运维初级工', mentorId: 3, mentor: '李四', avatar: '张', goal: '掌握220kV变电站一次设备运维技能及事故处理流程' },
+    { id: 2, username: 'zhaoliu', name: '赵六', employeeNo: 'PSB-2024-002', password: 'Abc@123456', role: 'apprentice', roleName: '徒弟', department: '广州供电局-运维检修部', position: '继电保护初级工', mentorId: 3, mentor: '李四', avatar: '赵', goal: '掌握继电保护装置调试、定值整定及故障分析技能' },
+    { id: 3, username: 'lisi', name: '李四', employeeNo: 'PSB-2005-088', password: 'Abc@123456', role: 'mentor', roleName: '师傅', department: '广州供电局-运维检修部', position: '变电检修高级技师', apprenticeIds: [1, 2], avatar: '李', goal: '培养新员工独立完成一次设备运维及继电保护调试基础工作' }
   ],
   loginAttempts: {},
   tasks: [
