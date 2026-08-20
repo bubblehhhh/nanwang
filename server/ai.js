@@ -88,6 +88,47 @@ export async function splitWithAI(text, methods = ['WBS']) {
   }
 }
 
+export async function generateMeetingMinutesWithAI(text) {
+  try {
+    const content = await askDeepSeek(
+      `你是供电局会议纪要助手。根据用户提供的会议材料或录音转录文本，生成结构化会议纪要。输出JSON对象，包含：title（会议名称，如无法判断则用"工作会议"）、date（会议日期YYYY-MM-DD，无法判断则用今天）、location（会议地点，无法判断则空）、attendees（参会人员数组，从文本中提取，无法判断则空数组）、agenda（议题数组，每项含topic议题、discussion讨论摘要、actionItems行动项数组，每项含task任务描述、owner责任人、dueDate截止日期）、decisions（决议数组）、nextMeeting（下次会议安排，无法判断则空）。严格基于输入文本，不编造人员或制度。`,
+      `请根据以下内容生成结构化会议纪要：\n${text}`,
+      true
+    )
+    const parsed = JSON.parse(content)
+    const minutes = {
+      title: parsed.title || '工作会议',
+      date: /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) ? parsed.date : new Date().toISOString().slice(0, 10),
+      location: parsed.location || '',
+      attendees: Array.isArray(parsed.attendees) ? parsed.attendees : [],
+      agenda: Array.isArray(parsed.agenda) ? parsed.agenda.map(item => ({
+        topic: item.topic || '议题',
+        discussion: item.discussion || '',
+        actionItems: Array.isArray(item.actionItems) ? item.actionItems.map(a => ({
+          task: a.task || '',
+          owner: a.owner || '',
+          dueDate: /^\d{4}-\d{2}-\d{2}$/.test(a.dueDate) ? a.dueDate : ''
+        })) : []
+      })) : [],
+      decisions: Array.isArray(parsed.decisions) ? parsed.decisions : [],
+      nextMeeting: parsed.nextMeeting || ''
+    }
+    return { minutes, ai: true }
+  } catch (error) {
+    const minutes = {
+      title: '工作会议',
+      date: new Date().toISOString().slice(0, 10),
+      location: '',
+      attendees: [],
+      agenda: [{ topic: '会议内容', discussion: text.slice(0, 800), actionItems: [] }],
+      decisions: [],
+      nextMeeting: '',
+      rawText: text
+    }
+    return { minutes, ai: false, warning: `AI暂不可用，已生成基础纪要框架：${error.message}` }
+  }
+}
+
 export async function generateReportWithAI(logs, type) {
   const source = logs.map((l) => `${l.date}｜${l.hours}小时｜${l.content}｜成果：${l.result}`).join('\n')
   try {
