@@ -12,7 +12,7 @@ import PDFKit from 'pdfkit'
 import PptxGenJS from 'pptxgenjs'
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx'
 import { initDb, readDb, resetDb, writeDb } from './db.js'
-import { generateReportWithAI, splitWithAI } from './ai.js'
+import { generateMeetingMinutesWithAI, generateReportWithAI, splitWithAI } from './ai.js'
 
 const app = express()
 const uploadDir = path.resolve('server/uploads')
@@ -72,9 +72,12 @@ const apiCatalog = [
   ['任务', 'PATCH', '/api/tasks/:id/progress', '任务负责人更新进度'],
   ['任务', 'POST', '/api/tasks/:id/verify', '师傅手动核销或退回任务'],
   ['任务', 'POST', '/api/tasks/:id/like', '师傅点赞优秀任务并奖励积分'],
-  ['智能处理', 'POST', '/api/file/upload', '上传并解析工作文件'],
+  ['智能处理', 'POST', '/api/file/upload', '多模态文件上传与解析'],
   ['智能处理', 'POST', '/api/desensitize', '敏感文本脱敏'],
   ['智能处理', 'POST', '/api/task/split', '使用科学方法与AI拆解任务'],
+  ['智能处理', 'POST', '/api/meeting-minutes/generate', 'AI生成结构化会议纪要'],
+  ['智能处理', 'POST', '/api/meeting-minutes/save', '保存会议纪要'],
+  ['智能处理', 'GET', '/api/meeting-minutes', '查询会议纪要列表'],
   ['工作库', 'GET', '/api/work-logs', '查询工作历史记录'],
   ['工作库', 'POST', '/api/work-logs', '新增工作记录'],
   ['工作库', 'DELETE', '/api/work-logs/:id', '删除工作记录'],
@@ -256,21 +259,71 @@ app.post('/api/tasks/:id/like', auth, (req, res) => {
 
 app.post('/api/desensitize', auth, (req, res) => ok(res, { text: desensitize(req.body.text) }))
 app.post('/api/task/split', auth, async (req, res) => ok(res, await splitWithAI(desensitize(req.body.text || ''), req.body.methods), '任务拆分完成'))
+app.post('/api/meeting-minutes/generate', auth, async (req, res) => {
+  const text = desensitize(req.body.text || '')
+  if (text.trim().length < 10) return fail(res, 400, '请至少输入10个字')
+  const result = await generateMeetingMinutesWithAI(text)
+  ok(res, result, result.ai ? '会议纪要已生成' : '已生成基础纪要框架')
+})
+app.post('/api/meeting-minutes/save', auth, (req, res) => {
+  const db = readDb()
+  db.meetingMinutes ||= []
+  const item = { id: nextId(db.meetingMinutes), ...req.body, creatorId: req.user.id, createdAt: new Date().toISOString().slice(0, 10) }
+  db.meetingMinutes.push(item); writeDb(db)
+  ok(res, item, '会议纪要已保存')
+})
+app.get('/api/meeting-minutes', auth, (req, res) => {
+  const db = readDb()
+  db.meetingMinutes ||= []
+  const list = req.user.role === 'mentor' ? db.meetingMinutes : db.meetingMinutes.filter(m => m.creatorId === req.user.id)
+  ok(res, list.sort((a, b) => b.id - a.id))
+})
+
+const fileTypes = {
+  text: { exts: ['.txt', '.csv', '.log', '.md'], label: '文本文件', icon: 'doc', color: '#52606d' },
+  document: { exts: ['.docx', '.doc'], label: 'Word文档', icon: 'doc', color: '#2b77c0' },
+  spreadsheet: { exts: ['.xlsx', '.xls'], label: '电子表格', icon: 'sheet', color: '#0d7a4f' },
+  pdf: { exts: ['.pdf'], label: 'PDF文档', icon: 'pdf', color: '#c53b47' },
+  audio: { exts: ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac'], label: '音频文件', icon: 'audio', color: '#7c3aed' },
+  image: { exts: ['.png', '.jpg', '.jpeg', '.bmp', '.gif', '.webp', '.tiff'], label: '图片文件', icon: 'image', color: '#d36b00' },
+  video: { exts: ['.mp4', '.avi', '.mov', '.mkv', '.wmv'], label: '视频文件', icon: 'video', color: '#9333ea' },
+  presentation: { exts: ['.pptx', '.ppt'], label: '演示文稿', icon: 'ppt', color: '#d36b00' }
+}
+const detectFileType = (ext) => {
+  for (const [type, meta] of Object.entries(fileTypes)) {
+    if (meta.exts.includes(ext)) return { type, ...meta }
+  }
+  return { type: 'unknown', label: '未知格式', icon: 'unknown', color: '#8390a1' }
+}
 
 app.post('/api/file/upload', auth, upload.single('file'), async (req, res) => {
   if (!req.file) return fail(res, 400, '请选择文件')
   const ext = path.extname(req.file.originalname).toLowerCase()
+  const fileInfo = detectFileType(ext)
   try {
-    let content = ''
-    if (['.txt', '.csv'].includes(ext)) content = fs.readFileSync(req.file.path, 'utf8')
-    else if (['.docx', '.doc'].includes(ext)) content = (await mammoth.extractRawText({ path: req.file.path })).value
-    else if (['.xlsx', '.xls'].includes(ext)) {
+    let content = '', processed = true, needsManualInput = false, processingNote = ''
+    if (fileInfo.type === 'text') content = fs.readFileSync(req.file.path, 'utf8')
+    else if (fileInfo.type === 'document') content = (await mammoth.extractRawText({ path: req.file.path })).value
+    else if (fileInfo.type === 'spreadsheet') {
       const book = XLSX.readFile(req.file.path)
       content = book.SheetNames.map((name) => `【${name}】\n${XLSX.utils.sheet_to_csv(book.Sheets[name])}`).join('\n')
-    } else if (['.mp3', '.wav', '.m4a', '.aac'].includes(ext)) content = '音频文件已接收。当前演示环境未配置语音转写服务，请在下方补充或粘贴转录文本后继续。'
-    else if (['.png', '.jpg', '.jpeg', '.bmp'].includes(ext)) content = '图片文件已接收。当前演示环境未配置OCR服务，请在下方补充识别文本后继续。'
-    else return fail(res, 415, '不支持该文件格式')
-    ok(res, { fileName: req.file.originalname, type: ext, content: desensitize(content) }, '文件解析完成，请复核内容')
+    } else if (fileInfo.type === 'audio') {
+      content = '音频文件已接收。当前演示环境未配置语音转写(ASR)服务，请在下方补充或粘贴转录文本后继续。'
+      processed = false; needsManualInput = true; processingNote = '需要语音转写'
+    } else if (fileInfo.type === 'image') {
+      content = '图片文件已接收。当前演示环境未配置OCR文字识别服务，请在下方补充识别文本后继续。'
+      processed = false; needsManualInput = true; processingNote = '需要OCR识别'
+    } else if (fileInfo.type === 'video') {
+      content = '视频文件已接收。当前演示环境未配置视频内容分析服务，请在下方补充描述或转录文本后继续。'
+      processed = false; needsManualInput = true; processingNote = '需要视频分析'
+    } else if (fileInfo.type === 'pdf') {
+      content = 'PDF文件已接收。当前演示环境未配置PDF文本提取，请在下方补充或粘贴文本内容后继续。'
+      processed = false; needsManualInput = true; processingNote = '需要PDF文本提取'
+    } else if (fileInfo.type === 'presentation') {
+      content = '演示文稿已接收。当前演示环境未配置PPT文本提取，请在下方补充或粘贴文本内容后继续。'
+      processed = false; needsManualInput = true; processingNote = '需要PPT文本提取'
+    } else return fail(res, 415, `不支持该文件格式（${ext}），支持的格式：文本、Word、Excel、PDF、音频、图片、视频、PPT`)
+    ok(res, { fileName: req.file.originalname, ext, fileType: fileInfo.type, fileLabel: fileInfo.label, fileIcon: fileInfo.icon, fileColor: fileInfo.color, processed, needsManualInput, processingNote, fileSize: req.file.size, content: desensitize(content) }, '文件解析完成，请复核内容')
   } catch (error) { fail(res, 500, `文件解析失败：${error.message}`) }
   finally { fs.rm(req.file.path, { force: true }, () => {}) }
 })
