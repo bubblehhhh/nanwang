@@ -90,6 +90,9 @@ const apiCatalog = [
   ['关怀', 'POST', '/api/care/message', '发送师徒问候'],
   ['关怀', 'PUT', '/api/care/config', '保存关怀模块配置'],
   ['工具', 'POST', '/api/pdf/merge', '合并多个PDF文件'],
+  ['个人', 'GET', '/api/profile', '查询当前用户个人资料'],
+  ['个人', 'PUT', '/api/profile/avatar', '修改头像和底色'],
+  ['个人', 'PUT', '/api/profile/password', '修改登录密码'],
   ['管理', 'POST', '/api/admin/reset', '恢复初始演示数据']
 ]
 
@@ -159,8 +162,7 @@ app.get('/api/dashboard', auth, (req, res) => {
   const scope = req.user.role === 'mentor' ? db.tasks.filter((t) => [1, 2].includes(t.assigneeId)) : db.tasks.filter((t) => t.assigneeId === req.user.id)
   const completed = scope.filter((t) => t.status === 'done').length
   const progress = scope.length ? Math.round(scope.reduce((s, t) => s + t.progress, 0) / scope.length) : 0
-  const calendarStart = new Date(); calendarStart.setHours(12, 0, 0, 0); calendarStart.setDate(calendarStart.getDate() - ((calendarStart.getDay() + 6) % 7) - 14)
-  const dates = Array.from({ length: 35 }, (_, index) => new Date(calendarStart.getTime() + index * 86400000).toISOString().slice(0, 10))
+  const dates = Array.from({ length: 35 }, (_, index) => new Date(Date.now() + (index - 17) * 86400000).toISOString().slice(0, 10))
   const workload = dates.map(date => {
     const daily = scope.filter(task => task.dueDate === date || task.createdAt === date || task.completedAt === date)
     const score = daily.reduce((sum, task) => sum + ({ P0: 4, P1: 3, P2: 2, P3: 1 })[task.priority], 0)
@@ -412,6 +414,39 @@ app.post('/api/pdf/merge', auth, upload.array('files', 10), async (req, res) => 
   try { const merged = await PDFDocument.create(); for (const file of req.files) { const doc = await PDFDocument.load(fs.readFileSync(file.path)); const pages = await merged.copyPages(doc, doc.getPageIndices()); pages.forEach((p) => merged.addPage(p)) } const bytes = await merged.save(); res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="merged.pdf"' }).send(Buffer.from(bytes)) }
   catch (e) { fail(res, 400, `PDF合并失败：${e.message}`) }
   finally { req.files?.forEach((f) => fs.rm(f.path, { force: true }, () => {})) }
+})
+
+app.get('/api/profile', auth, (req, res) => {
+  const db = readDb()
+  const user = db.users.find((u) => u.id === req.user.id)
+  if (!user) return fail(res, 404, '用户不存在')
+  const safe = { ...user }; delete safe.password
+  ok(res, safe)
+})
+
+app.put('/api/profile/avatar', auth, (req, res) => {
+  const db = readDb()
+  const user = db.users.find((u) => u.id === req.user.id)
+  if (!user) return fail(res, 404, '用户不存在')
+  const avatar = String(req.body.avatar || '').trim().slice(0, 2)
+  const avatarColor = String(req.body.avatarColor || '').trim()
+  if (!avatar) return fail(res, 400, '头像不能为空')
+  user.avatar = avatar
+  if (avatarColor) user.avatarColor = avatarColor
+  writeDb(db)
+  ok(res, { avatar: user.avatar, avatarColor: user.avatarColor }, '头像已更新')
+})
+
+app.put('/api/profile/password', auth, (req, res) => {
+  const db = readDb()
+  const user = db.users.find((u) => u.id === req.user.id)
+  if (!user) return fail(res, 404, '用户不存在')
+  const { oldPassword, newPassword } = req.body
+  if (user.password !== oldPassword) return fail(res, 400, '当前密码不正确')
+  if (typeof newPassword !== 'string' || newPassword.length < 8) return fail(res, 400, '新密码至少8位')
+  user.password = newPassword
+  writeDb(db)
+  ok(res, true, '密码修改成功')
 })
 
 app.post('/api/admin/reset', auth, (_, res) => ok(res, resetDb(), '测试数据已恢复'))
