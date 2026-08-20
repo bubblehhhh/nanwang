@@ -10,6 +10,7 @@ import * as XLSX from 'xlsx'
 import { PDFDocument } from 'pdf-lib'
 import PDFKit from 'pdfkit'
 import PptxGenJS from 'pptxgenjs'
+import JSZip from 'jszip'
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx'
 import { initDb, readDb, resetDb, writeDb } from './db.js'
 import { generateMeetingMinutesWithAI, generateReportWithAI, splitWithAI } from './ai.js'
@@ -94,6 +95,7 @@ const apiCatalog = [
   ['关怀', 'POST', '/api/care/message', '发送师徒问候'],
   ['关怀', 'PUT', '/api/care/config', '保存关怀模块配置'],
   ['工具', 'POST', '/api/pdf/merge', '合并多个PDF文件'],
+  ['工具', 'POST', '/api/pdf/extract', '按页码范围提取PDF页面'],
   ['个人', 'GET', '/api/profile', '查询当前用户个人资料'],
   ['个人', 'PUT', '/api/profile/avatar', '修改头像和底色'],
   ['个人', 'PUT', '/api/profile/password', '修改登录密码'],
@@ -541,6 +543,41 @@ app.post('/api/pdf/merge', auth, upload.array('files', 10), async (req, res) => 
   try { const merged = await PDFDocument.create(); for (const file of req.files) { const doc = await PDFDocument.load(fs.readFileSync(file.path)); const pages = await merged.copyPages(doc, doc.getPageIndices()); pages.forEach((p) => merged.addPage(p)) } const bytes = await merged.save(); res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="merged.pdf"' }).send(Buffer.from(bytes)) }
   catch (e) { fail(res, 400, `PDF合并失败：${e.message}`) }
   finally { req.files?.forEach((f) => fs.rm(f.path, { force: true }, () => {})) }
+})
+
+app.post('/api/pdf/extract', auth, upload.single('file'), async (req, res) => {
+  const cleanup = () => req.file?.path && fs.rm(req.file.path, { force: true }, () => {})
+  try {
+    if (!req.file) return fail(res, 400, '请选择一个PDF文件')
+    const spec = String(req.body.spec || req.body.pages || '').trim()
+    if (!spec) return fail(res, 400, '请填写页码范围，如 1-3,5,8-9')
+    const source = await PDFDocument.load(fs.readFileSync(req.file.path))
+    const totalPages = source.getPageCount()
+    const indexes = []
+    for (const part of spec.split(',').map(item => item.trim()).filter(Boolean)) {
+      if (/^\d+$/.test(part)) {
+        indexes.push(Number(part) - 1)
+        continue
+      }
+      const range = part.match(/^(\d+)-(\d+)$/)
+      if (range) {
+        const start = Number(range[1]); const end = Number(range[2])
+        if (start > end) return fail(res, 400, `页码范围 ${part} 不合法`)
+        for (let page = start; page <= end; page += 1) indexes.push(page - 1)
+        continue
+      }
+      return fail(res, 400, `页码格式不正确：${part}`)
+    }
+    const uniqueIndexes = [...new Set(indexes)]
+    if (!uniqueIndexes.length) return fail(res, 400, '未识别到有效页码')
+    if (uniqueIndexes.some(index => index < 0 || index >= totalPages)) return fail(res, 400, `页码超出范围，当前PDF共 ${totalPages} 页`)
+    const extracted = await PDFDocument.create()
+    const pages = await extracted.copyPages(source, uniqueIndexes)
+    pages.forEach((page) => extracted.addPage(page))
+    const bytes = await extracted.save()
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="提取页面.pdf"' }).send(Buffer.from(bytes))
+  } catch (e) { fail(res, 400, `PDF页面提取失败：${e.message}`) }
+  finally { cleanup() }
 })
 
 app.get('/api/profile', auth, (req, res) => {
