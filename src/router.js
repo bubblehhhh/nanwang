@@ -8,6 +8,7 @@ import WorkLibrary from './views/WorkLibraryEnhanced.vue'
 import CareCenter from './views/CareCenterEnhanced.vue'
 import Toolbox from './views/Toolbox.vue'
 import CapabilityCenter from './views/CapabilityCenter.vue'
+import Profile from './views/Profile.vue'
 
 const router = createRouter({ history: location.protocol === 'file:' ? createWebHashHistory() : createWebHistory(), routes: [
   { path: '/login', component: Login, meta: { public: true } },
@@ -18,7 +19,8 @@ const router = createRouter({ history: location.protocol === 'file:' ? createWeb
   { path: '/capabilities', component: CapabilityCenter },
   { path: '/work-library', component: WorkLibrary },
   { path: '/care', component: CareCenter },
-  { path: '/toolbox', component: Toolbox }
+  { path: '/toolbox', component: Toolbox },
+  { path: '/profile', component: Profile, meta: { title: '个人设置' } }
 ] })
 router.beforeEach((to) => {
   const loggedIn = Boolean(localStorage.getItem('xinhuo_token'))
