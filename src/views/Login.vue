@@ -27,7 +27,6 @@ async function submit() {
     <section class="login-intro">
       <div class="login-logo"><span>电</span><div>南方电网<small>南网·薪火</small></div></div>
       <div class="intro-copy"><p>MENTORSHIP WORKSPACE</p><h1>薪火相传<br>点亮南网</h1><div class="intro-line"></div><p class="desc">让经验沉淀为方法，让成长发生在每一次协作之中。</p></div>
-      <div class="login-stats"><div><b>2</b><span>在培学员</span></div><div><b>87%</b><span>平均进度</span></div><div><b>12</b><span>本月里程碑</span></div></div>
     </section>
     <section class="login-panel">
       <div class="login-box">
