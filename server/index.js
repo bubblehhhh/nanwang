@@ -1,4 +1,3 @@
-<<<<<<< Updated upstream
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
@@ -189,7 +188,6 @@ const apiCatalog = [
   ['关怀', 'POST', '/api/care/message', '发送师徒问候'],
   ['关怀', 'PUT', '/api/care/config', '保存关怀模块配置'],
   ['工具', 'POST', '/api/pdf/merge', '合并多个PDF文件'],
->>>>>>> Stashed changes
   ['个人', 'GET', '/api/profile', '查询当前用户个人资料'],
   ['个人', 'PUT', '/api/profile/avatar', '修改头像和底色'],
   ['个人', 'PUT', '/api/profile/password', '修改登录密码'],
@@ -234,8 +232,6 @@ app.put('/api/settings/ai-key', auth, async (req, res) => {
     process.env.DEEPSEEK_API_KEY = apiKey
     ok(res, { configured: true, available: true }, '新密钥验证通过并已启用')
   } catch (error) { fail(res, 502, `无法验证DeepSeek密钥：${error.message}`) }
-})
-<<<<<<< Updated upstream
 
 app.post('/api/auth/login', (req, res) => {
   const { username, password, role } = req.body
@@ -969,8 +965,6 @@ app.post('/api/pdf/merge', auth, upload.array('files', 10), async (req, res) => 
   catch (e) { fail(res, 400, `PDF合并失败：${e.message}`) }
   finally { req.files?.forEach((f) => fs.rm(f.path, { force: true }, () => {})) }
 })
-
->>>>>>> Stashed changes
 app.get('/api/profile', auth, (req, res) => {
   const db = readDb()
   const user = db.users.find((u) => u.id === req.user.id)

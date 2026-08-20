@@ -379,31 +379,6 @@ async function confirmPublish() {
 .method-grid b,.method-grid small{display:block}
 .method-grid small{font-size:12px;color:#8490a0}
 .split-btn{width:100%;margin-top:12px}
-<<<<<<< Updated upstream
-.minutes-panel{background:#f8fafc;border:1px solid #e2e7ed;padding:14px;margin:8px 0 18px}
-.minutes-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
-.minutes-header b{font-size:14px;display:block}
-.minutes-header small{font-size:14px;color:#8390a1}
-.minutes-actions{display:flex;gap:6px}
-.minutes-section{margin-bottom:10px}
-.minutes-section small{color:#52606d;font-weight:bold;display:block;margin-bottom:4px}
-.attendee-tags{display:flex;flex-wrap:wrap;gap:4px}
-.agenda-item{border-left:3px solid #087c66;padding:8px 0 8px 12px;margin-bottom:8px}
-.agenda-topic{display:flex;align-items:center;gap:8px}
-.topic-num{width:20px;height:20px;border-radius:50%;background:#087c66;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;flex-shrink:0}
-.agenda-discussion{font-size:15px;color:#69778a;line-height:1.5;margin:4px 0}
-.action-items{margin-top:6px}
-.action-item{display:flex;align-items:center;gap:6px;font-size:14px;color:#52606d;padding:3px 0}
-.action-item small{color:#8390a1}
-.minutes-section ul{margin:4px 0;padding-left:20px;font-size:15px;color:#52606d}
-.task-cards{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
-.task-cards article{display:grid;grid-template-columns:auto 1fr auto;gap:9px;border:1px solid #e3e8ed;padding:12px}
-.task-cards article>div>span{font-size:13px;color:#087c66}
-.task-cards p,.task-cards small{font-size:14px;color:#69778a;line-height:1.5}
-.task-cards small{display:block}
-.task-assign{display:flex;align-items:center;gap:6px;margin-top:6px}
-.task-assign span{font-size:13px;color:#8390a1}
-=======
 .minutes-export-bar{display:flex;align-items:center;justify-content:space-between;background:#f0f7f4;border:1px solid #c9e0d6;padding:10px 14px;margin:8px 0 18px;border-radius:4px}
 .minutes-export-label{font-size:13px;font-weight:bold;color:#087c66;display:flex;align-items:center;gap:6px}
 .minutes-export-label::before{content:'';width:6px;height:6px;border-radius:50%;background:#087c66}
@@ -416,7 +391,6 @@ async function confirmPublish() {
 .task-cards small{display:block}
 .task-cards :deep(.el-input){width:100%}
 .task-assign{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
->>>>>>> Stashed changes
 .mind-map{display:grid;grid-template-columns:180px 1fr;align-items:center;min-height:420px}
 .mind-root{background:#087c66;color:#fff;padding:18px;text-align:center;border-radius:6px}
 .mind-root small{display:block;margin-top:5px}
