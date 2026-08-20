@@ -159,7 +159,8 @@ app.get('/api/dashboard', auth, (req, res) => {
   const scope = req.user.role === 'mentor' ? db.tasks.filter((t) => [1, 2].includes(t.assigneeId)) : db.tasks.filter((t) => t.assigneeId === req.user.id)
   const completed = scope.filter((t) => t.status === 'done').length
   const progress = scope.length ? Math.round(scope.reduce((s, t) => s + t.progress, 0) / scope.length) : 0
-  const dates = Array.from({ length: 35 }, (_, index) => new Date(Date.now() + (index - 17) * 86400000).toISOString().slice(0, 10))
+  const calendarStart = new Date(); calendarStart.setHours(12, 0, 0, 0); calendarStart.setDate(calendarStart.getDate() - ((calendarStart.getDay() + 6) % 7) - 14)
+  const dates = Array.from({ length: 35 }, (_, index) => new Date(calendarStart.getTime() + index * 86400000).toISOString().slice(0, 10))
   const workload = dates.map(date => {
     const daily = scope.filter(task => task.dueDate === date || task.createdAt === date || task.completedAt === date)
     const score = daily.reduce((sum, task) => sum + ({ P0: 4, P1: 3, P2: 2, P3: 1 })[task.priority], 0)
