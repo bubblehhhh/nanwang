@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
 import Login from './views/Login.vue'
+import ForgotPassword from './views/ForgotPassword.vue'
 import Dashboard from './views/DashboardEnhanced.vue'
 import TaskCenter from './views/TaskCenterEnhanced.vue'
 import SmartInput from './views/SmartInputEnhanced.vue'
@@ -12,6 +13,7 @@ import Profile from './views/Profile.vue'
 
 const router = createRouter({ history: location.protocol === 'file:' ? createWebHashHistory() : createWebHistory(), routes: [
   { path: '/login', component: Login, meta: { public: true } },
+  { path: '/forgot-password', component: ForgotPassword, meta: { public: true } },
   { path: '/', component: Dashboard },
   { path: '/tasks', component: TaskCenter },
   { path: '/smart-input', component: SmartInput },

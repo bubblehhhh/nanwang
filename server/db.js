@@ -9,15 +9,15 @@ const today = new Date().toISOString().slice(0, 10)
 
 const seed = {
   users: [
-    { id: 1, username: 'zhangsan', name: '张三', employeeNo: 'PSB-2024-001', password: 'Abc@123456', role: 'apprentice', roleName: '组员', department: '广州供电局-运维检修部', position: '变电运维初级工', mentorId: 3, mentor: '李四', avatar: '张', goal: '掌握220kV变电站一次设备运维技能及事故处理流程' },
-    { id: 2, username: 'zhaoliu', name: '赵六', employeeNo: 'PSB-2024-002', password: 'Abc@123456', role: 'apprentice', roleName: '组员', department: '广州供电局-运维检修部', position: '继电保护初级工', mentorId: 3, mentor: '李四', avatar: '赵', goal: '掌握继电保护装置调试、定值整定及故障分析技能' },
-    { id: 3, username: 'lisi', name: '李四', employeeNo: 'PSB-2005-088', password: 'Abc@123456', role: 'mentor', roleName: '组长', department: '广州供电局-运维检修部', position: '变电检修高级技师', apprenticeIds: [1, 2], avatar: '李', goal: '培养新员工独立完成一次设备运维及继电保护调试基础工作' }
+    { id: 1, username: 'zhangsan', name: '张三', employeeNo: 'PSB-2024-001', phone: '13800138001', password: 'Abc@123456', role: 'apprentice', roleName: '组员', department: '广州供电局-运维检修部', position: '变电运维初级工', mentorId: 3, mentor: '李四', avatar: '张', goal: '掌握220kV变电站一次设备运维技能及事故处理流程' },
+    { id: 2, username: 'zhaoliu', name: '赵六', employeeNo: 'PSB-2024-002', phone: '13800138002', password: 'Abc@123456', role: 'apprentice', roleName: '组员', department: '广州供电局-运维检修部', position: '继电保护初级工', mentorId: 3, mentor: '李四', avatar: '赵', goal: '掌握继电保护装置调试、定值整定及故障分析技能' },
+    { id: 3, username: 'lisi', name: '李四', employeeNo: 'PSB-2005-088', phone: '13800138003', password: 'Abc@123456', role: 'mentor', roleName: '组长', department: '广州供电局-运维检修部', position: '变电检修高级技师', apprenticeIds: [1, 2], avatar: '李', goal: '培养新员工独立完成一次设备运维及继电保护调试基础工作' }
   ],
   loginAttempts: {},
+  resetCodes: {},
   tasks: [
     { id: 101, title: '完成220kV设备巡视记录', description: '按巡视规范完成一次设备检查并上传记录', priority: 'P1', workCategory: 'project', projectName: '220kV变电站运维提升项目', startTime: '09:00', endTime: '10:30', assigneeId: 1, assignee: '张三', creatorId: 3, source: '导师任务', status: 'doing', progress: 65, dueDate: today, standard: '巡视点位完整，异常项附照片', points: 80, method: '四象限法', skillIds: ['OPS-01', 'SAFE-01'], riskPoints: ['设备带电区域保持安全距离', '发现异常不得擅自处置'], evidenceRequired: ['巡视记录', '异常点照片'], createdAt: today },
-    { id: 102, title: '安全工器具检查与台账更新', description: '完成班组安全工器具外观检查、有效期核对与台账更新', priority: 'P2', workCategory: 'daily', projectName: '日常工作', startTime: '14:00', endTime: '15:00', assigneeId: 1, assignee: '张三', creatorId: 3, source: '导师任务', status: 'done', progress: 100, dueDate: today, standard: '账物一致，异常项有记录和闭环责任人', points: 60, method: 'PDCA', skillIds: ['SAFE-01', 'DATA-01'], riskPoints: ['检查前确认工器具停用状态'], evidenceRequired: ['检查清单', '更新后台账'], createdAt: today, completedAt: today, mentorComment: '检查细致，台账记录完整。' },
-    { id: 103, title: '继电保护定值核验', description: '根据班前会议要求，完成保护装置定值单核对与版本留痕', priority: 'P1', workCategory: 'meeting', projectName: '会议行动项', startTime: '10:00', endTime: '11:30', assigneeId: 2, assignee: '赵六', creatorId: 3, source: '会议行动项', status: 'todo', progress: 0, dueDate: today, standard: '定值单版本与装置一致，双人签字确认', points: 80, method: 'WBS', skillIds: ['RELAY-01', 'SAFE-01'], riskPoints: ['差异未闭环前禁止投运', '核对前确认装置在试验状态'], evidenceRequired: ['定值核对记录', '双人签字表'], createdAt: today }
+    { id: 102, title: '安全工器具检查与台账更新', description: '完成班组安全工器具外观检查、有效期核对与台账更新', priority: 'P2', workCategory: 'daily', projectName: '日常工作', startTime: '14:00', endTime: '15:00', assigneeId: 1, assignee: '张三', creatorId: 3, source: '导师任务', status: 'done', progress: 100, dueDate: today, standard: '账物一致，异常项有记录和闭环责任人', points: 60, method: 'PDCA', skillIds: ['SAFE-01', 'DATA-01'], riskPoints: ['检查前确认工器具停用状态'], evidenceRequired: ['检查清单', '更新后台账'], createdAt: today, completedAt: today, mentorComment: '检查细致，台账记录完整。' }
   ],
   skillCatalog: [
     { id: 'SAFE-01', domain: '安全生产', name: '作业风险辨识与控制', description: '识别作业危险点并落实控制措施', targetLevel: 4, critical: true },
@@ -64,8 +64,7 @@ const seed = {
   gratitude: [{ id: 701, from: '张三', to: '李四', content: '感谢师傅耐心讲解设备巡视的风险点。', date: today }],
   careActions: [],
   moduleConfig: {},
-  drafts: [],
-  meetingMinutes: []
+  drafts: []
 }
 
 export function initDb() {
@@ -85,15 +84,16 @@ export function initDb() {
     })
     if (!db.gratitude) { db.gratitude = seed.gratitude; changed = true }
     if (!db.careActions) { db.careActions = []; changed = true }
+    if (!db.resetCodes) { db.resetCodes = {}; changed = true }
+    const seedUserMap = { 1: '13800138001', 2: '13800138002', 3: '13800138003' }
+    db.users.forEach((u) => { if (!u.phone && seedUserMap[u.id]) { u.phone = seedUserMap[u.id]; changed = true } })
     for (const field of ['skillCatalog', 'competencyAssessments', 'safetyCases', 'weeklyReviews']) {
       if (!db[field]) { db[field] = seed[field]; changed = true }
     }
     for (const field of ['mentorNotes', 'taskLikes']) {
       if (!db[field]) { db[field] = seed[field]; changed = true }
     }
-    if (!db.meetingMinutes) { db.meetingMinutes = []; changed = true }
     if (!db.tasks.some(task => task.id === 102)) { db.tasks.push(seed.tasks[1]); changed = true }
-    if (!db.tasks.some(task => task.id === 103)) { db.tasks.push(seed.tasks[2]); changed = true }
     db.tasks.forEach(task => {
       if (!task.skillIds) { task.skillIds = task.workCategory === 'meeting' ? ['COOP-01'] : ['DATA-01']; changed = true }
       if (!task.riskPoints) { task.riskPoints = []; changed = true }
