@@ -99,7 +99,7 @@ async function extractPdf(confirmed = false) {
       <div>
         <p class="eyebrow">UTILITY TOOLBOX</p>
         <h1>办公百宝箱</h1>
-        <p>处理日常工作中常见的 PDF 合并与页面提取需求，上传文件时自动进行敏感信息脱敏审核</p>
+        <p>处理日常工作中常见的 PDF 合并与页面提取需求</p>
       </div>
     </div>
     <div class="tool-grid">
