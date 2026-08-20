@@ -5,14 +5,16 @@ import { Plus,Search,EditPen,CircleCheck,Star } from '@element-plus/icons-vue'
 import api,{errorText,unwrap} from '../api'
 import { useAuthStore } from '../store'
 
-const auth=useAuthStore();const tasks=ref([]);const users=ref([]);const skills=ref([]);const likes=ref([]);const viewMode=ref('groups');const filter=ref('all');const keyword=ref('');const dialog=ref(false);const progressDialog=ref(false);const active=ref(null);const apprenticeFilter=ref('all');const openPriorities=ref([])
+const auth=useAuthStore();const tasks=ref([]);const users=ref([]);const skills=ref([]);const likes=ref([]);const viewMode=ref('groups');const filter=ref('all');const keyword=ref('');const dialog=ref(false);const progressDialog=ref(false);const active=ref(null);const apprenticeFilter=ref('all');const openPriorities=ref([]);const safetyChecks=ref([])
+const roleTone=computed(()=>auth.user?.role==='mentor'?'mentor':'apprentice')
 const form=reactive({title:'',description:'',priority:'P1',workCategory:'daily',projectName:'日常工作',startTime:'09:00',endTime:'10:00',assigneeId:1,dueDate:new Date().toISOString().slice(0,10),standard:'',points:60,method:'WBS',source:'导师任务',skillIds:['SAFE-01'],riskText:'',evidenceText:'工作记录'})
-const statuses={todo:'待开始',doing:'进行中',verify:'待核销',done:'已完成'}
+const statuses={todo:'未完成',doing:'未完成',verify:'未完成',done:'已完成'}
 const groupMeta={meeting:{title:'会议任务',desc:'由会议纪要、会议录音或会议行动项生成',icon:'会'},project:{title:'项目工作',desc:'专项、建设、改造和阶段性项目任务',icon:'项'},daily:{title:'日常工作',desc:'巡检、学习、培训和常规管理事项',icon:'常'}}
 const filtered=computed(()=>tasks.value.filter(t=>(filter.value==='all'||t.status===filter.value)&&(!keyword.value||`${t.title}${t.assignee}${t.projectName}`.includes(keyword.value))))
 const scopedTasks=computed(()=>filtered.value.filter(t=>auth.user?.role!=='mentor'||apprenticeFilter.value==='all'||t.assigneeId===Number(apprenticeFilter.value)))
+const summarizeStatuses=list=>({done:list.filter(t=>t.status==='done').length,undone:list.filter(t=>t.status!=='done').length,verify:list.filter(t=>t.status==='verify').length})
 const workGroups=computed(()=>['meeting','project','daily'].map(category=>{const list=scopedTasks.value.filter(t=>(/会议/.test(`${t.source}${t.projectName}`)?'meeting':t.workCategory)===category);return{category,...groupMeta[category],tasks:list,priorities:['P0','P1','P2','P3'].map(priority=>({priority,tasks:list.filter(t=>t.priority===priority)})).filter(g=>g.tasks.length)}}).filter(g=>g.tasks.length))
-const apprenticeStats=computed(()=>users.value.map(user=>{const list=tasks.value.filter(t=>t.assigneeId===user.id);return{...user,total:list.length,verify:list.filter(t=>t.status==='verify').length,progress:list.length?Math.round(list.reduce((s,t)=>s+t.progress,0)/list.length):0}}))
+const apprenticeStats=computed(()=>users.value.map(user=>{const list=tasks.value.filter(t=>t.assigneeId===user.id);return{...user,total:list.length,verify:list.filter(t=>t.status==='verify').length,summary:summarizeStatuses(list)}}))
 const kanban=computed(()=>Object.entries(statuses).map(([status,title])=>({status,title,tasks:scopedTasks.value.filter(t=>t.status===status)})))
 const projectGroups=computed(()=>{
   const map={}
@@ -27,15 +29,15 @@ const projectGroups=computed(()=>{
   })
   return Object.values(map).map(g=>({
     ...g,
-    progress:g.tasks.length?Math.round(g.tasks.reduce((s,t)=>s+t.progress,0)/g.tasks.length):0,
+    summary:summarizeStatuses(g.tasks),
     sourceList:Object.values(g.sources),
     workCategory:g.tasks[0]?.workCategory||'daily'
   })).sort((a,b)=>b.tasks.length-a.tasks.length)
 })
 async function load(){const dashboard=unwrap(await api.get('/dashboard'));tasks.value=unwrap(await api.get('/tasks'));users.value=dashboard.users.filter(u=>u.role==='apprentice');likes.value=dashboard.likes||[];skills.value=unwrap(await api.get('/capabilities',{params:{userId:users.value[0]?.id||1}})).skills}
-async function create(){try{form.source=form.workCategory==='meeting'?'会议行动项':'导师任务';const{riskText,evidenceText,...base}=form;const payload={...base,riskPoints:riskText.split(/[；;\n]/).map(v=>v.trim()).filter(Boolean),evidenceRequired:evidenceText.split(/[；;\n]/).map(v=>v.trim()).filter(Boolean)};await api.post('/tasks',payload);ElMessage.success('任务已发布并进入能力证据链');dialog.value=false;load()}catch(e){ElMessage.error(errorText(e))}}
-function openTask(task){active.value={...task,note:task.note||''};progressDialog.value=true}
-async function saveProgress(){await api.patch(`/tasks/${active.value.id}/progress`,{progress:active.value.progress,note:active.value.note});ElMessage.success('进度已更新');progressDialog.value=false;load()}
+async function create(){if(auth.user?.role!=='mentor')return ElMessage.warning('徒弟不能分配任务');try{form.source=form.workCategory==='meeting'?'会议行动项':'导师任务';const{riskText,evidenceText,...base}=form;const payload={...base,riskPoints:riskText.split(/[；;\n]/).map(v=>v.trim()).filter(Boolean),evidenceRequired:evidenceText.split(/[；;\n]/).map(v=>v.trim()).filter(Boolean)};await api.post('/tasks',payload);ElMessage.success('任务已发布并进入能力证据链');dialog.value=false;load()}catch(e){ElMessage.error(errorText(e))}}
+function openTask(task){active.value={...task,note:task.note||''};safetyChecks.value=(task.riskPoints||[]).map(()=>false);progressDialog.value=true}
+async function saveProgress(){if((active.value?.riskPoints||[]).length&&safetyChecks.value.some(v=>!v))return ElMessage.warning('请先完成全部安全确认');await api.patch(`/tasks/${active.value.id}/progress`,{progress:100,note:active.value.note});ElMessage.success('已标记完成并提交师傅核销');progressDialog.value=false;load()}
 async function verify(task,approved){const{value}=await ElMessageBox.prompt(approved?'请输入导师核销意见':'请输入退回原因',approved?'任务核销':'退回修改',{inputValue:approved?'符合完成标准，同意核销。':''});await api.post(`/tasks/${task.id}/verify`,{approved,comment:value});ElMessage.success(approved?'已核销并进入工作库':'已退回学员');load()}
 async function like(task){try{const{value}=await ElMessageBox.prompt('说明这项工作做得好的地方，反馈会同步给徒弟。','点赞并奖励积分',{inputValue:'任务完成质量优秀，过程记录完整，继续保持。',confirmButtonText:'点赞并奖励'});await api.post(`/tasks/${task.id}/like`,{comment:value,points:10});ElMessage.success('点赞已反馈给徒弟，并奖励10积分');load()}catch(e){if(e!=='cancel'&&e!=='close')ElMessage.error(errorText(e))}}
 const liked=task=>likes.value.some(item=>item.taskId===task.id)
@@ -43,12 +45,12 @@ onMounted(load)
 </script>
 
 <template>
-<div class="page">
+<div class="page task-page" :class="roleTone">
 <div class="page-title">
 <div>
-<p class="eyebrow">TASK MANAGEMENT</p>
-<h1>任务中心</h1>
-<p>先按任务来源分类，再在类内按紧急程度管理</p>
+<p class="eyebrow">{{auth.user?.role==='mentor'?'MENTOR TASK DESK':'MY TASK DESK'}}</p>
+<h1>{{auth.user?.role==='mentor'?'带教任务中心':'我的执行任务中心'}}</h1>
+<p>{{auth.user?.role==='mentor'?'按学员、来源和优先级管理分配、核销与激励':'聚焦本人待办、进度更新和待核销事项'}}</p>
 </div>
 <el-button v-if="auth.user?.role==='mentor'" type="primary" :icon="Plus" @click="dialog=true">发布任务</el-button>
 </div>
@@ -58,7 +60,7 @@ onMounted(load)
 <div class="student-main">
 <b>{{item.name}}</b>
 <small>{{item.position}}</small>
-<el-progress :percentage="item.progress" :stroke-width="6" :show-text="false"/>
+<div class="student-status-line"><span class="done">{{item.summary.done}} 已完成</span><span class="doing">{{item.summary.undone}} 未完成</span></div>
 </div>
 <div class="student-numbers">
 <span>
@@ -68,6 +70,10 @@ onMounted(load)
 </div>
 </button>
 </div>
+<section v-else class="apprentice-brief">
+<div><b>我的职责</b><span>只负责本人任务执行、进度反馈和提交核销，不参与任务分配。</span></div>
+<div><b>{{tasks.filter(t=>t.status==='verify').length}}</b><span>项任务待师傅核销</span></div>
+</section>
 <div class="toolbar" :class="{'mentor-toolbar':auth.user?.role==='mentor'}">
 <el-input v-model="keyword" :prefix-icon="Search" placeholder="搜索任务、项目或负责人" clearable/>
 <el-select v-if="auth.user?.role==='mentor'" v-model="apprenticeFilter">
@@ -78,7 +84,7 @@ onMounted(load)
 <el-segmented v-model="viewMode" :options="[{label:'分组列表',value:'groups'},{label:'项目视图',value:'projects'},{label:'状态看板',value:'board'}]"/>
 </div>
 <div v-if="viewMode==='board'" class="office-kanban">
-<section v-for="column in kanban" :key="column.status" :class="column.status"><header><b>{{column.title}}</b><span>{{column.tasks.length}}</span></header><div class="kanban-stack"><article v-for="task in column.tasks" :key="task.id"><div class="kanban-top"><el-tag size="small" :type="task.priority==='P0'?'danger':task.priority==='P1'?'warning':'primary'">{{task.priority}}</el-tag><strong>+{{task.points||50}} 积分</strong></div><h3>{{task.title}}</h3><p>{{task.projectName}} · {{task.assignee}}</p><el-progress :percentage="task.progress" :stroke-width="6"/><footer><small>截止 {{task.dueDate}}</small><div><el-button v-if="auth.user?.role==='mentor'&&task.status==='verify'" text type="success" @click="verify(task,true)">核销</el-button><el-button v-if="auth.user?.role==='mentor'&&task.status==='done'" text :type="liked(task)?'success':'primary'" :icon="Star" :disabled="liked(task)" @click="like(task)">{{liked(task)?'已点赞':'点赞'}}</el-button><el-button v-else-if="auth.user?.role==='apprentice'&&task.status!=='verify'&&task.status!=='done'" text @click="openTask(task)">更新</el-button></div></footer></article></div></section>
+<section v-for="column in kanban" :key="column.status" :class="column.status"><header><b>{{column.title}}</b><span>{{column.tasks.length}}</span></header><div class="kanban-stack"><article v-for="task in column.tasks" :key="task.id"><div class="kanban-top"><el-tag size="small" :type="task.priority==='P0'?'danger':task.priority==='P1'?'warning':'primary'">{{task.priority}}</el-tag><strong>+{{task.points||50}} 积分</strong></div><h3>{{task.title}}</h3><p>{{task.projectName}} · {{task.assignee}}</p><div class="task-state-pill" :class="task.status">{{task.status==='done'?'已完成':'未完成'}}</div><footer><small>截止 {{task.dueDate}}</small><div><el-button v-if="auth.user?.role==='mentor'&&task.status==='verify'" text type="success" @click="verify(task,true)">核销</el-button><el-button v-if="auth.user?.role==='mentor'&&task.status==='done'" text :type="liked(task)?'success':'primary'" :icon="Star" :disabled="liked(task)" @click="like(task)">{{liked(task)?'已点赞':'点赞'}}</el-button><el-button v-else-if="auth.user?.role==='apprentice'&&task.status!=='verify'&&task.status!=='done'" text @click="openTask(task)">更新</el-button></div></footer></article></div></section>
 </div>
 <div v-else-if="viewMode==='projects'" class="project-view">
 <div v-for="pg in projectGroups" :key="pg.projectName" class="project-card">
@@ -86,9 +92,9 @@ onMounted(load)
 <div class="project-icon" :class="pg.workCategory">{{pg.workCategory==='meeting'?'会':pg.workCategory==='project'?'项':'常'}}</div>
 <div class="project-title">
 <b>{{pg.projectName}}</b>
-<span>{{pg.tasks.length}} 项任务 · 进度 {{pg.progress}}%</span>
+<span>{{pg.tasks.length}} 项任务 · {{pg.summary.done}} 已完成 / {{pg.summary.undone}} 未完成</span>
 </div>
-<el-progress :percentage="pg.progress" :stroke-width="7" style="width:120px"/>
+<div class="project-summary-badges"><span class="done">{{pg.summary.done}} 已完成</span><span class="verify">{{pg.summary.undone}} 未完成</span></div>
 </header>
 <div v-for="src in pg.sourceList" :key="src.label" class="source-section">
 <div class="source-label">
@@ -102,8 +108,8 @@ onMounted(load)
 <b>{{task.title}}</b>
 <span>{{task.assignee}} · 截止 {{task.dueDate}} · {{task.points||50}} 积分</span>
 </div>
-<el-progress :percentage="task.progress" :stroke-width="6" style="width:80px"/>
-<span class="status" :class="task.status">{{statuses[task.status]}}</span>
+<div class="task-state-pill" :class="task.status">{{task.status==='done'?'已完成':'未完成'}}</div>
+<span class="status" :class="task.status">{{task.status==='done'?'已完成':'未完成'}}</span>
 <div class="compact-actions">
 <template v-if="auth.user?.role==='mentor'&&task.status==='verify'">
 <el-button size="small" @click="verify(task,false)">退回</el-button>
@@ -127,7 +133,7 @@ onMounted(load)
 <b>{{work.title}}</b>
 <span>{{work.desc}} · {{work.tasks.length}} 项</span>
 </div>
-<el-progress :percentage="Math.round(work.tasks.reduce((s,t)=>s+t.progress,0)/work.tasks.length)" :stroke-width="7"/>
+<div class="group-summary-badges"><span class="done">{{summarizeStatuses(work.tasks).done}} 已完成</span><span class="verify">{{summarizeStatuses(work.tasks).undone}} 未完成</span></div>
 </header>
 <el-collapse v-model="openPriorities" class="priority-collapse">
 <el-collapse-item v-for="group in work.priorities" :key="`${work.category}-${group.priority}`" :name="`${work.category}-${group.priority}`">
@@ -147,10 +153,11 @@ onMounted(load)
 <div class="task-skill-tags"><el-tag v-for="id in task.skillIds||[]" :key="id" size="small" effect="plain">{{skills.find(s=>s.id===id)?.name||id}}</el-tag><span v-if="task.riskPoints?.length" class="risk-count">{{task.riskPoints.length}}项风险预控</span></div>
 </div>
 <div class="compact-progress">
-<el-progress :percentage="task.progress" :stroke-width="7"/>
-<small v-if="task.status==='verify'">等待师傅手动核销</small>
+<div class="task-state-pill" :class="task.status">{{statuses[task.status]}}</div>
+<small v-if="task.status==='verify'">已提交，等待师傅核销</small>
+<small v-else-if="task.status!=='done'">尚未完成</small>
 </div>
-<span class="status" :class="task.status">{{statuses[task.status]}}</span>
+<span class="status" :class="task.status">{{task.status==='done'?'已完成':'未完成'}}</span>
 <div class="compact-actions">
 <template v-if="auth.user?.role==='mentor'&&task.status==='verify'">
 <el-button size="small" @click="verify(task,false)">退回</el-button>
@@ -223,26 +230,27 @@ onMounted(load)
 <el-button type="primary" @click="create">确认发布</el-button>
 </template>
 </el-dialog>
-<el-dialog v-model="progressDialog" :title="auth.user?.role==='mentor'?'任务详情':'更新任务进度'" width="560">
+<el-dialog v-model="progressDialog" :title="auth.user?.role==='mentor'?'任务详情':'提交完成确认'" width="560">
 <template v-if="active">
 <h3>{{active.title}}</h3>
-<el-slider v-model="active.progress" :step="5" show-input :disabled="auth.user?.role==='mentor'||active.status==='verify'||active.status==='done'"/>
 <el-input v-model="active.note" type="textarea" :rows="4" :disabled="auth.user?.role==='mentor'||active.status==='verify'||active.status==='done'" placeholder="说明完成情况、问题或需要的支持"/>
 <div class="standard">
 <small>完成标准</small>{{active.standard}}</div>
-<div v-if="active.riskPoints?.length" class="task-risk-box"><b>执行前安全确认</b><label v-for="risk in active.riskPoints" :key="risk"><el-checkbox/>{{risk}}</label></div>
+<div v-if="active.riskPoints?.length" class="task-risk-box"><b>执行前安全确认</b><label v-for="(risk,index) in active.riskPoints" :key="risk"><el-checkbox v-model="safetyChecks[index]" :disabled="auth.user?.role==='mentor'||active.status==='verify'||active.status==='done'"/>{{risk}}</label></div>
 <div v-if="active.evidenceRequired?.length" class="task-evidence"><b>能力证据</b><el-tag v-for="item in active.evidenceRequired" :key="item" effect="plain">{{item}}</el-tag></div>
+<div v-if="auth.user?.role==='apprentice'&&active?.status!=='verify'&&active?.status!=='done'" class="completion-box"><b>完成提交</b><span>确认本项任务已完成后，将直接提交给师傅核销。</span></div>
 </template>
 <template #footer>
 <el-button @click="progressDialog=false">关闭</el-button>
-<el-button v-if="auth.user?.role==='apprentice'&&active?.status!=='verify'&&active?.status!=='done'" type="primary" @click="saveProgress">保存进度</el-button>
+<el-button v-if="auth.user?.role==='apprentice'&&active?.status!=='verify'&&active?.status!=='done'" type="primary" @click="saveProgress">标记完成并提交核销</el-button>
 </template>
 </el-dialog>
 </div>
 </template>
 <style scoped>
+.task-page.mentor .page-title{padding:18px 0 12px;border-bottom:1px solid #eadcc1}.task-page.mentor .eyebrow{color:#9a6517}.task-page.apprentice .page-title{padding:18px 0 12px;border-bottom:1px solid #d7e7e0}.task-page.apprentice .eyebrow{color:#087c66}.apprentice-brief{display:grid;grid-template-columns:1fr 220px;gap:12px;margin-bottom:14px}.apprentice-brief>div{background:#f6fbf9;border:1px solid #d7e8e1;border-radius:6px;padding:12px 14px}.apprentice-brief b,.apprentice-brief span{display:block}.apprentice-brief b{font-size:16px;color:#163533}.apprentice-brief span{font-size:13px;color:#6f7f8f;margin-top:4px}.task-page.mentor .office-kanban>section>header span{background:#f1e5d1;color:#8f5c10}.task-page.apprentice .office-kanban>section>header span{background:#dbece6;color:#0f705d}.student-status-line{display:flex;gap:8px;margin-top:6px;font-size:11px}.student-status-line .done{color:#087c66}.student-status-line .doing{color:#2b77c0}
 .office-kanban{display:grid;grid-template-columns:repeat(4,minmax(210px,1fr));gap:10px;align-items:start;overflow:auto}.office-kanban>section{background:#f4f6f8;border:1px solid #e1e6eb;min-height:420px;padding:10px}.office-kanban>section>header{display:flex;justify-content:space-between;padding:4px 3px 11px}.office-kanban>section>header span{background:#dfe5ea;min-width:22px;text-align:center;border-radius:3px}.kanban-stack{display:flex;flex-direction:column;gap:8px}.kanban-stack article{background:#fff;border:1px solid #e0e5ea;border-top:3px solid #8693a5;padding:11px}.office-kanban .doing article{border-top-color:#2b77c0}.office-kanban .verify article{border-top-color:#e1a125}.office-kanban .done article{border-top-color:#087c66}.kanban-top,article footer{display:flex;justify-content:space-between;align-items:center}.kanban-top strong{font-size:10px;color:#087c66}.kanban-stack h3{font-size:13px;line-height:1.45;margin:9px 0 5px}.kanban-stack p,.kanban-stack small{font-size:10px;color:#7f8b9a}.kanban-stack footer{margin-top:8px}.toolbar{flex-wrap:wrap}.toolbar>.el-segmented:last-child{margin-left:auto}
-.project-view{display:flex;flex-direction:column;gap:14px}.project-card{background:#fff;border:1px solid #e2e7ed;padding:16px}.project-header{display:flex;align-items:center;gap:12px;margin-bottom:14px}.project-icon{width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold;color:#fff;background:#52606d;flex-shrink:0}.project-icon.meeting{background:#e1a125}.project-icon.project{background:#2b77c0}.project-icon.daily{background:#087c66}.project-title{flex:1}.project-title b{font-size:15px;display:block}.project-title span{font-size:11px;color:#8390a1}.source-section{margin-bottom:12px}.source-label{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px dashed #e3e8ed}.source-label span{font-size:11px;color:#8390a1}.project-task-list{display:flex;flex-direction:column;gap:8px}.project-task-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:#f8fafc;border:1px solid #e8ecf2;border-radius:4px}.project-task-main{flex:1;min-width:0}.project-task-main b{font-size:12px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-task-main span{font-size:10px;color:#8390a1}.project-task-row .status{font-size:10px;padding:2px 6px;border-radius:3px;white-space:nowrap}.project-task-row .status.todo{background:#e8ecf2;color:#52606d}.project-task-row .status.doing{background:#d4e4f6;color:#2b77c0}.project-task-row .status.verify{background:#fcf0d8;color:#c08500}.project-task-row .status.done{background:#d4f0e8;color:#087c66}.compact-actions{display:flex;gap:4px;flex-shrink:0}
-@media(max-width:1000px){.office-kanban{grid-template-columns:repeat(4,240px)}.project-task-row{flex-wrap:wrap}}
+.project-view{display:flex;flex-direction:column;gap:14px}.project-card{background:#fff;border:1px solid #e2e7ed;padding:16px}.project-header{display:flex;align-items:center;gap:12px;margin-bottom:14px}.project-icon{width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold;color:#fff;background:#52606d;flex-shrink:0}.project-icon.meeting{background:#e1a125}.project-icon.project{background:#2b77c0}.project-icon.daily{background:#087c66}.project-title{flex:1}.project-title b{font-size:15px;display:block}.project-title span{font-size:11px;color:#8390a1}.project-summary-badges,.group-summary-badges{display:flex;gap:8px;flex-wrap:wrap}.project-summary-badges span,.group-summary-badges span{padding:3px 8px;border-radius:999px;font-size:11px}.project-summary-badges .done,.group-summary-badges .done{background:#dff3e8;color:#087c66}.project-summary-badges .verify,.group-summary-badges .verify{background:#fff1d9;color:#b77812}.source-section{margin-bottom:12px}.source-label{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px dashed #e3e8ed}.source-label span{font-size:11px;color:#8390a1}.project-task-list{display:flex;flex-direction:column;gap:8px}.project-task-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:#f8fafc;border:1px solid #e8ecf2;border-radius:4px}.project-task-main{flex:1;min-width:0}.project-task-main b{font-size:12px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-task-main span{font-size:10px;color:#8390a1}.project-task-row .status{font-size:10px;padding:2px 6px;border-radius:3px;white-space:nowrap}.project-task-row .status.todo{background:#e8ecf2;color:#52606d}.project-task-row .status.doing{background:#d4e4f6;color:#2b77c0}.project-task-row .status.verify{background:#fcf0d8;color:#c08500}.project-task-row .status.done{background:#d4f0e8;color:#087c66}.compact-actions{display:flex;gap:4px;flex-shrink:0}.task-state-pill{display:inline-flex;align-items:center;justify-content:center;min-width:72px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600}.task-state-pill.todo{background:#edf1f5;color:#52606d}.task-state-pill.doing{background:#e4eefb;color:#2b77c0}.task-state-pill.verify{background:#fff1d9;color:#b77812}.task-state-pill.done{background:#dff3e8;color:#087c66}
+.completion-box{margin-top:12px;padding:12px 14px;background:#eef7f3;border:1px solid #cfe3d8;border-radius:6px}.completion-box b,.completion-box span{display:block}.completion-box b{font-size:14px;color:#087c66}.completion-box span{font-size:12px;color:#688191;margin-top:4px}
+@media(max-width:1000px){.office-kanban{grid-template-columns:repeat(4,240px)}.project-task-row{flex-wrap:wrap}.apprentice-brief{grid-template-columns:1fr}}
 </style>
-

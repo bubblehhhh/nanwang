@@ -3,7 +3,9 @@ import { computed, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled, MagicStick, Check, Document, EditPen, Filter } from '@element-plus/icons-vue'
 import api, { errorText, unwrap } from '../api'
+import { useAuthStore } from '../store'
 
+const auth = useAuthStore()
 const text = ref(''), tasks = ref([]), methods = ref(['WBS']), confirmed = ref(false)
 const loading = ref(false), publishing = ref(false), warning = ref('')
 const source = ref(null), view = ref('cards'), fileName = ref('')
@@ -133,11 +135,13 @@ async function split() {
 }
 
 function openPublishDialog() {
+  if (auth.user?.role !== 'mentor') return ElMessage.warning('徒弟不能分配任务')
   if (!selected.value.length) return ElMessage.warning('请至少选择一项任务')
   publishDialog.value = true
 }
 
 async function confirmPublish() {
+  if (auth.user?.role !== 'mentor') return ElMessage.warning('徒弟不能分配任务')
   publishing.value = true
   try {
     const d = unwrap(await api.post('/tasks/bulk', {
@@ -153,12 +157,12 @@ async function confirmPublish() {
 </script>
 
 <template>
-<div class="page smartx">
+<div class="page smartx" :class="auth.user?.role==='mentor'?'mentor':'apprentice'">
 <div class="page-title">
 <div>
-<p class="eyebrow">AI TASK STRUCTURING</p>
-<h1>智能识别与科学拆解</h1>
-<p>AI自动判断材料来源，支持多模态文件识别、会议纪要生成与发布确认</p>
+<p class="eyebrow">{{auth.user?.role==='mentor'?'MENTOR TASK STRUCTURING':'AI TASK STRUCTURING'}}</p>
+<h1>{{auth.user?.role==='mentor'?'带教材料识别与任务拆解':'智能识别与科学拆解'}}</h1>
+<p>{{auth.user?.role==='mentor'?'识别材料、审核结构化任务并分配给学员':'AI自动判断材料来源，支持多模态文件识别与结构化拆解'}}</p>
 </div>
 </div>
 
@@ -294,7 +298,8 @@ async function confirmPublish() {
 <span v-if="tasks.filter(t => t.published).length">已发布 {{ tasks.filter(t => t.published).length }} 项</span>
 <span v-if="tasks.filter(t => t.duplicate).length">重复 {{ tasks.filter(t => t.duplicate).length }} 项</span>
 </div>
-<el-button type="primary" :icon="Filter" :loading="publishing" :disabled="!selected.length" @click="openPublishDialog">发布确认</el-button>
+<el-button v-if="auth.user?.role==='mentor'" type="primary" :icon="Filter" :loading="publishing" :disabled="!selected.length" @click="openPublishDialog">发布确认</el-button>
+<span v-else class="publish-note">徒弟仅可查看拆解结果，任务发布由师傅完成。</span>
 </div>
 </section>
 </div>
@@ -402,6 +407,13 @@ async function confirmPublish() {
 .publish-bar{display:flex;justify-content:space-between;align-items:center;padding:12px;background:#f8fafc;border:1px solid #e2e7ed;margin-top:12px}
 .publish-summary{display:flex;gap:14px;font-size:12px;color:#52606d}
 .publish-summary b{color:#087c66;font-size:14px}
+.publish-note{font-size:12px;color:#8b6a31}
+.smartx.mentor .page-title{padding-bottom:10px;border-bottom:1px solid #ecdcbf}
+.smartx.mentor .eyebrow{color:#9a6517}
+.smartx.mentor .step.active{background:#fbf4e8;color:#8f5c10}
+.smartx.mentor .step.active span,.smartx.mentor .step.done span{background:#9a6517}
+.smartx.mentor .sx-input :deep(.el-upload-dragger svg){color:#9a6517}
+.smartx.apprentice .eyebrow{color:#087c66}
 .desensitize-compare{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .desensitize-col h4{font-size:13px;margin:0 0 6px}
 .desensitized-preview{background:#f8fafc;border:1px solid #e2e7ed;padding:10px;border-radius:4px;font-size:12px;line-height:1.6;min-height:200px;max-height:300px;overflow:auto}

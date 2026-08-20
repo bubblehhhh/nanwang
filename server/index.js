@@ -204,6 +204,7 @@ app.get('/api/tasks', auth, (req, res) => {
 })
 
 app.post('/api/tasks', auth, (req, res) => {
+  if (req.user.role !== 'mentor') return fail(res, 403, '只有师傅可以分配任务')
   const db = readDb()
   const assignee = db.users.find((u) => u.id === Number(req.body.assigneeId))
   if (!assignee) return fail(res, 400, '请选择有效的任务负责人')
@@ -215,6 +216,7 @@ app.post('/api/tasks', auth, (req, res) => {
 })
 
 app.post('/api/tasks/bulk', auth, (req, res) => {
+  if (req.user.role !== 'mentor') return fail(res, 403, '只有师傅可以批量发布任务')
   const db = readDb()
   const incoming = Array.isArray(req.body.tasks) ? req.body.tasks : []
   if (!incoming.length) return fail(res, 400, '请至少选择一项任务')
@@ -503,10 +505,27 @@ app.post('/api/weekly-reviews', auth, (req, res) => {
   const db = readDb(); const userId = req.user.role === 'mentor' ? Number(req.body.userId) : req.user.id
   if (!db.users.some(item => item.id === userId && item.role === 'apprentice')) return fail(res, 400, '请选择有效学员')
   const existing = db.weeklyReviews.find(item => item.userId === userId && item.week === req.body.week)
-  if (existing && req.user.role === 'mentor') { existing.mentorComment = String(req.body.mentorComment || ''); existing.status = 'reviewed'; writeDb(db); return ok(res, existing, '周复盘点评已保存') }
-  if (existing) return fail(res, 409, '本周复盘已经提交')
-  const item = { id: nextId(db.weeklyReviews), userId, mentorId: db.users.find(item => item.id === userId)?.mentorId, week: req.body.week || new Date().toISOString().slice(0,10), achievements: String(req.body.achievements || ''), blockers: String(req.body.blockers || ''), supportNeeded: String(req.body.supportNeeded || ''), nextFocus: String(req.body.nextFocus || ''), mentorComment: '', status: 'submitted', createdAt: new Date().toISOString() }
-  if (!item.achievements || !item.nextFocus) return fail(res, 400, '请填写本周成果和下周重点')
+  if (req.user.role === 'mentor') {
+    if (!existing) return fail(res, 404, '学员尚未提交本周复盘')
+    existing.mentorComment = String(req.body.mentorComment || '')
+    existing.status = 'reviewed'
+    existing.reviewedAt = new Date().toISOString()
+    writeDb(db)
+    return ok(res, existing, '周复盘点评已保存')
+  }
+  const payload = {
+    achievements: String(req.body.achievements || ''),
+    blockers: String(req.body.blockers || ''),
+    supportNeeded: String(req.body.supportNeeded || ''),
+    nextFocus: String(req.body.nextFocus || '')
+  }
+  if (!payload.achievements || !payload.nextFocus) return fail(res, 400, '请填写本周成果和下周重点')
+  if (existing) {
+    Object.assign(existing, payload, { status: existing.mentorComment ? 'reviewed' : 'submitted', updatedAt: new Date().toISOString() })
+    writeDb(db)
+    return ok(res, existing, '周复盘已更新')
+  }
+  const item = { id: nextId(db.weeklyReviews), userId, mentorId: db.users.find(item => item.id === userId)?.mentorId, week: req.body.week || new Date().toISOString().slice(0,10), ...payload, mentorComment: '', status: 'submitted', createdAt: new Date().toISOString() }
   db.weeklyReviews.push(item); writeDb(db); ok(res, item, '周复盘已提交')
 })
 
