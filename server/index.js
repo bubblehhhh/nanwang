@@ -164,7 +164,7 @@ app.get('/api/dashboard', auth, (req, res) => {
   const dates = Array.from({ length: 35 }, (_, index) => new Date(calendarStart.getTime() + index * 86400000).toISOString().slice(0, 10))
   const workload = dates.map(date => {
     const daily = scope.filter(task => task.dueDate === date || task.createdAt === date || task.completedAt === date)
-    const score = daily.reduce((sum, task) => sum + ({ P0: 4, P1: 3, P2: 2, P3: 1 })[task.priority], 0)
+    const score = daily.reduce((sum, task) => sum + ({ P1: 3, P2: 2 })[task.priority], 0)
     return { date, taskCount: daily.length, workload: score, level: Math.min(4, Math.ceil(score / 2)) }
   })
   const visibleIds = req.user.role === 'mentor' ? db.users.filter(user => user.role === 'apprentice').map(user => user.id) : [req.user.id]
@@ -203,7 +203,7 @@ app.post('/api/tasks', auth, (req, res) => {
   const assignee = db.users.find((u) => u.id === Number(req.body.assigneeId))
   if (!assignee) return fail(res, 400, '请选择有效的任务负责人')
   if (!Array.isArray(req.body.skillIds) || !req.body.skillIds.length) return fail(res, 400, '任务必须关联至少一项岗位技能')
-  if (['P0', 'P1'].includes(req.body.priority) && (!Array.isArray(req.body.riskPoints) || !req.body.riskPoints.length)) return fail(res, 400, 'P0/P1任务必须填写安全风险点')
+  if (req.body.priority === 'P1' && (!Array.isArray(req.body.riskPoints) || !req.body.riskPoints.length)) return fail(res, 400, 'P1任务必须填写安全风险点')
   if (db.tasks.some((item) => taskKey(item) === taskKey(req.body))) return fail(res, 409, '该负责人已存在同名任务，不能重复发布')
   const task = { id: nextId(db.tasks), ...req.body, assigneeId: assignee.id, assignee: assignee.name, creatorId: req.user.id, progress: 0, status: 'todo', createdAt: new Date().toISOString().slice(0, 10) }
   db.tasks.push(task); writeDb(db); ok(res, task, '任务已发布')
@@ -269,10 +269,8 @@ app.get('/api/tasks/member-summary', auth, (req, res) => {
       verify: pending.filter((t) => t.status === 'verify').length
     }
     const byPriority = {
-      P0: pending.filter((t) => t.priority === 'P0').length,
       P1: pending.filter((t) => t.priority === 'P1').length,
-      P2: pending.filter((t) => t.priority === 'P2').length,
-      P3: pending.filter((t) => t.priority === 'P3').length
+      P2: pending.filter((t) => t.priority === 'P2').length
     }
     return {
       userId: user.id,

@@ -4,7 +4,7 @@ const detectSource = (text = '') => {
   return { sourceType: 'daily', sourceConfidence: 76, sourceReason: '内容更符合日常工作或临时事项特征' }
 }
 
-const pointByPriority = { P0: 120, P1: 80, P2: 50, P3: 30 }
+const pointByPriority = { P1: 80, P2: 50 }
 
 const fallbackTasks = (text) => {
   const sentences = text.split(/[。；;\n]/).map((item) => item.trim()).filter(Boolean).slice(0, 6)
@@ -54,7 +54,7 @@ export async function splitWithAI(text, methods = ['WBS']) {
   try {
     const selectedMethods = methods.length ? methods.join('、') : 'WBS'
     const content = await askDeepSeek(
-      `你是供电局任务管理助手。先把材料来源识别为meeting、project或daily，再拆分用户提供的工作内容，不编造人员或制度。使用用户选择的方法：${selectedMethods}。输出JSON对象，包含sourceType、sourceConfidence(0-100)、sourceReason和tasks。tasks为3到10个任务，每项包含title、description、priority(P0-P3)、dueDate(YYYY-MM-DD)、standard、method、points；method必须说明实际采用的方法，points按任务难度建议30到120积分。`,
+      `你是供电局任务管理助手。先把材料来源识别为meeting、project或daily，再拆分用户提供的工作内容，不编造人员或制度。使用用户选择的方法：${selectedMethods}。输出JSON对象，包含sourceType、sourceConfidence(0-100)、sourceReason和tasks。tasks为3到10个任务，每项包含title、description、priority(P1或P2，P1为重要优先、P2为常规执行)、dueDate(YYYY-MM-DD)、standard、method、points；method必须说明实际采用的方法，points按任务难度建议50到80积分。`,
       `科学拆解方法：${selectedMethods}\n待拆解内容：\n${text}`,
       true
     )
@@ -74,7 +74,7 @@ export async function splitWithAI(text, methods = ['WBS']) {
     const normalized = tasks.map((task, index) => ({
       title: task.title || `任务步骤${index + 1}`,
       description: task.description || task.title || '按要求完成任务步骤',
-      priority: ['P0', 'P1', 'P2', 'P3'].includes(task.priority) ? task.priority : 'P2',
+      priority: ['P1', 'P2'].includes(task.priority) ? task.priority : 'P2',
       dueDate: /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate || '') ? task.dueDate : new Date(Date.now() + (index + 1) * 86400000).toISOString().slice(0, 10),
       standard: task.standard || '结果可核验、过程有记录、异常有说明',
       method: task.method || 'WBS',

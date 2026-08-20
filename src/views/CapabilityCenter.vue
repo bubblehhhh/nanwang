@@ -12,7 +12,7 @@ const readinessClass=computed(()=>data.value.readiness>=80?'ready':data.value.re
 const maxPending=computed(()=>Math.max(1,...taskSummary.value.map((m)=>m.pending)))
 async function load(){const params=selectedUserId.value?{userId:selectedUserId.value}:{};data.value=unwrap(await api.get('/capabilities',{params}));if(!selectedUserId.value&&auth.user?.role==='mentor'&&data.value.heatmap?.length){selectedUserId.value=data.value.heatmap[0].user.id;await load()}}
 async function loadTaskSummary(){if(auth.user?.role!=='mentor')return;summaryLoading.value=true;try{taskSummary.value=unwrap(await api.get('/tasks/member-summary'))}catch(e){ElMessage.error(errorText(e))}finally{summaryLoading.value=false}}
-const priorityColors={P0:'#e06d23',P1:'#d96500',P2:'#2972bd',P3:'#a8b0bc'}
+const priorityColors={P1:'#d96500',P2:'#2972bd'}
 async function generatePath(){pathLoading.value=true;try{path.value=unwrap(await api.post('/training-path/generate',{userId:selectedUserId.value||auth.user.id})).path;ElMessage.success('已按能力差距生成培养路径')}catch(e){ElMessage.error(errorText(e))}finally{pathLoading.value=false}}
 function openAssess(skill){activeSkill.value=skill;Object.assign(assessment,{level:skill.level,comment:skill.assessment?.comment||''});assessOpen.value=true}
 async function saveAssessment(){try{await api.post(`/capabilities/${selectedUserId.value}/assess`,{skillId:activeSkill.value.id,...assessment});ElMessage.success('能力认证已保存');assessOpen.value=false;await load()}catch(e){ElMessage.error(errorText(e))}}
@@ -25,7 +25,7 @@ onMounted(()=>{load();loadTaskSummary()})
 <div v-if="auth.user?.role==='mentor'" class="talent-heatmap panel"><div class="panel-head"><div><h2>班组人才技能热力图</h2><p>快速识别关键技能断层和培养优先级</p></div></div><div class="heatmap-table"><div class="heat-head">学员</div><div v-for="skill in data.skills" :key="skill.id" class="heat-head">{{skill.name}}</div><template v-for="person in data.heatmap" :key="person.user.id"><div class="heat-user"><b>{{person.user.name}}</b><span>{{person.readiness}}%</span></div><div v-for="skill in person.skills" :key="skill.id" class="heat-cell" :class="`level-${skill.level}`" :title="`${skill.name}：${skill.levelName}`">L{{skill.level}}<small>/{{skill.targetLevel}}</small></div></template></div></div>
 <section v-if="auth.user?.role==='mentor'" class="panel task-viz-panel" v-loading="summaryLoading"><div class="panel-head"><div><h2><el-icon><DataAnalysis/></el-icon> 组员待完成任务概览</h2><p>直观掌握各组员当前任务量，便于合理分配后续工作</p></div><el-button text type="primary" @click="loadTaskSummary">刷新</el-button></div>
 <div v-if="taskSummary.length" class="task-viz-body">
-<div class="viz-toolbar"><div class="viz-toggle"><button :class="{active:vizMode==='status'}" @click="vizMode='status'">按状态</button><button :class="{active:vizMode==='priority'}" @click="vizMode='priority'">按优先级</button></div><div class="viz-legend" v-if="vizMode==='status'"><span class="legend-item"><i class="dot s-todo"></i>待开始</span><span class="legend-item"><i class="dot s-doing"></i>进行中</span><span class="legend-item"><i class="dot s-verify"></i>待核销</span><span class="legend-item"><i class="dot s-done"></i>已完成</span></div><div class="viz-legend" v-else><span class="legend-item"><i class="dot p-P0"></i>P0 紧急</span><span class="legend-item"><i class="dot p-P1"></i>P1 高</span><span class="legend-item"><i class="dot p-P2"></i>P2 中</span><span class="legend-item"><i class="dot p-P3"></i>P3 低</span><span class="legend-item"><i class="dot s-done"></i>已完成</span></div></div>
+<div class="viz-toolbar"><div class="viz-toggle"><button :class="{active:vizMode==='status'}" @click="vizMode='status'">按状态</button><button :class="{active:vizMode==='priority'}" @click="vizMode='priority'">按优先级</button></div><div class="viz-legend" v-if="vizMode==='status'"><span class="legend-item"><i class="dot s-todo"></i>待开始</span><span class="legend-item"><i class="dot s-doing"></i>进行中</span><span class="legend-item"><i class="dot s-verify"></i>待核销</span><span class="legend-item"><i class="dot s-done"></i>已完成</span></div><div class="viz-legend" v-else><span class="legend-item"><i class="dot p-P1"></i>P1 重要优先</span><span class="legend-item"><i class="dot p-P2"></i>P2 常规执行</span><span class="legend-item"><i class="dot s-done"></i>已完成</span></div></div>
 <div class="bar-chart">
 <div v-for="member in taskSummary" :key="member.userId" class="bar-group">
 <div class="bar-label"><b>{{member.userName}}</b><small>{{member.position}}</small></div>
@@ -37,21 +37,19 @@ onMounted(()=>{load();loadTaskSummary()})
 </div>
 <div class="bar-track" v-else>
 <div class="bar-segment s-done" :style="{width:(member.completed/member.total*100)+'%'}" :title="`已完成 ${member.completed}`"></div>
-<div class="bar-segment p-P0" :style="{width:(member.byPriority.P0/member.total*100)+'%'}" :title="`P0紧急 ${member.byPriority.P0}`"></div>
-<div class="bar-segment p-P1" :style="{width:(member.byPriority.P1/member.total*100)+'%'}" :title="`P1高 ${member.byPriority.P1}`"></div>
-<div class="bar-segment p-P2" :style="{width:(member.byPriority.P2/member.total*100)+'%'}" :title="`P2中 ${member.byPriority.P2}`"></div>
-<div class="bar-segment p-P3" :style="{width:(member.byPriority.P3/member.total*100)+'%'}" :title="`P3低 ${member.byPriority.P3}`"></div>
+<div class="bar-segment p-P1" :style="{width:(member.byPriority.P1/member.total*100)+'%'}" :title="`P1重要优先 ${member.byPriority.P1}`"></div>
+<div class="bar-segment p-P2" :style="{width:(member.byPriority.P2/member.total*100)+'%'}" :title="`P2常规执行 ${member.byPriority.P2}`"></div>
 </div>
 <div class="bar-stats"><span class="stat-pending">待完成 <b>{{member.pending}}</b></span><span class="stat-total">共 {{member.total}} 项</span><span class="stat-progress">进度 {{member.avgProgress}}%</span></div>
-<div class="bar-priority" v-if="vizMode==='status'"><span v-for="p in ['P0','P1','P2','P3']" :key="p" v-if="member.byPriority[p]" class="priority-tag" :style="{color:priorityColors[p],borderColor:priorityColors[p]}">{{p}} {{member.byPriority[p]}}</span></div>
-<div class="bar-priority" v-else><span v-for="p in ['P0','P1','P2','P3']" :key="p" class="priority-tag" :class="{zero:member.byPriority[p]===0}" :style="{color:priorityColors[p],borderColor:priorityColors[p]}">{{p}} <b>{{member.byPriority[p]}}</b></span></div>
+<div class="bar-priority" v-if="vizMode==='status'"><span v-for="p in ['P1','P2']" :key="p" v-if="member.byPriority[p]" class="priority-tag" :style="{color:priorityColors[p],borderColor:priorityColors[p]}">{{p}} {{member.byPriority[p]}}</span></div>
+<div class="bar-priority" v-else><span v-for="p in ['P1','P2']" :key="p" class="priority-tag" :class="{zero:member.byPriority[p]===0}" :style="{color:priorityColors[p],borderColor:priorityColors[p]}">{{p}} <b>{{member.byPriority[p]}}</b></span></div>
 </div>
 </div>
 <div class="viz-summary">
 <div class="viz-stat"><b>{{taskSummary.reduce((s,m)=>s+m.pending,0)}}</b><span>总待完成</span></div>
 <div class="viz-stat"><b>{{taskSummary.reduce((s,m)=>s+m.total,0)}}</b><span>总任务数</span></div>
 <div class="viz-stat"><b>{{taskSummary.filter(m=>m.pending===0).length}}</b><span>已清零</span></div>
-<div class="viz-stat warn" v-if="taskSummary.find(m=>m.byPriority.P0>0)"><b>{{taskSummary.reduce((s,m)=>s+m.byPriority.P0,0)}}</b><span>P0紧急</span></div>
+<div class="viz-stat warn" v-if="taskSummary.find(m=>m.byPriority.P1>0)"><b>{{taskSummary.reduce((s,m)=>s+m.byPriority.P1,0)}}</b><span>P1重要</span></div>
 </div>
 </div>
 <el-empty v-else description="暂无组员任务数据" :image-size="60"/>
@@ -67,10 +65,10 @@ onMounted(()=>{load();loadTaskSummary()})
 .task-viz-panel{margin-bottom:18px}.task-viz-panel .panel-head h2{display:flex;align-items:center;gap:7px}.task-viz-panel .panel-head .el-icon{color:var(--blue)}
 .viz-legend{display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap}.legend-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)}.legend-item .dot{width:10px;height:10px;border-radius:2px;display:inline-block}
 .dot.s-todo{background:#a8b0bc}.dot.s-doing{background:#2972bd}.dot.s-verify{background:#d96500}.dot.s-done{background:#16885a}
-.dot.p-P0{background:#e06d23}.dot.p-P1{background:#d96500}.dot.p-P2{background:#2972bd}.dot.p-P3{background:#a8b0bc}
+.dot.p-P1{background:#d96500}.dot.p-P2{background:#2972bd}
 .viz-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
 .viz-toggle{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}.viz-toggle button{border:0;background:#fff;padding:6px 14px;font-size:11px;cursor:pointer;color:var(--muted);transition:all .2s}.viz-toggle button.active{background:var(--blue);color:#fff;font-weight:600}
-.bar-segment.p-P0{background:#e06d23}.bar-segment.p-P1{background:#d96500}.bar-segment.p-P2{background:#2972bd}.bar-segment.p-P3{background:#a8b0bc}
+.bar-segment.p-P1{background:#d96500}.bar-segment.p-P2{background:#2972bd}
 .priority-tag.zero{opacity:.35}.priority-tag.zero b{font-weight:400}
 .bar-chart{display:flex;flex-direction:column;gap:14px}
 .bar-group{display:grid;grid-template-columns:130px 1fr;gap:12px;align-items:center}
